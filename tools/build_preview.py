@@ -59,7 +59,7 @@ async def record() -> dict:
         limit=40, seed=7, cancel=asyncio.Event(),
     )
     run_meta["created"] = "2026-10-18T09:00:00Z"
-    runs = [{"meta": run_meta, "report": run_report(run_meta), "items": store.load_run_items(run_meta["id"])}]
+    runs = [{"meta": run_meta, "report": run_report(run_meta, store.load_run_items(run_meta["id"])), "items": store.load_run_items(run_meta["id"])}]
     for it in runs[0]["items"]:
         for st in it["steps"]:
             for r in st.get("reads") or []:

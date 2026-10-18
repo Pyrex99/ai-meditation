@@ -245,3 +245,5 @@ table.cells td.top1 { background: var(--internal); color: var(--surface); outlin
 .itemrow:hover { border-color: var(--line); }
 .itemrow .o { font-size: 0.8rem; color: var(--muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .kind[style]::before { background: var(--c); }
+table.cells td.trk { outline: 1.5px dashed var(--warn); color: var(--warn); }
+.w.trk { border-color: var(--warn); color: var(--warn); }

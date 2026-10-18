@@ -890,7 +890,7 @@
         ${meta.status === "running" ? `<div class="panel stack-sm"><div class="row between"><span class="small">${meta.progress.done} of ${meta.progress.total} generations</span><button class="btn ghost" id="cancel" type="button">Cancel</button></div><div class="progress"><i style="width:${pct}%"></i></div></div>` : ""}
         ${meta.status === "error" ? `<p class="err">The run stopped: ${esc(meta.error)}</p>` : ""}
         ${meta.failed ? `<p class="small err">${meta.failed} generation${meta.failed === 1 ? "" : "s"} failed after a retry and ${meta.failed === 1 ? "is" : "are"} left out. Last error: ${esc(meta.last_failure || "")}</p>` : ""}
-        ${["running", "error", "cancelled", "partial"].includes(meta.status) ? `<div class="row"><button class="btn" id="finalize" type="button">Score what's finished</button><span class="small muted">Stops the run if it's stuck and scores every saved generation.</span></div>` : ""}
+        ${["running", "error", "cancelled", "partial"].includes(meta.status) ? `<div class="row"><button class="btn" id="finalize" type="button">Score what's finished</button><span class="small muted">Stops the run if it's stuck and scores every saved generation.</span></div>` : `<div class="row"><button class="btn ghost" id="finalize" type="button">Rebuild report</button><span class="small muted">Rescores from the saved data, with the latest report format. No GPU needed.</span></div>`}
         ${res ? `
         <div class="panel stack">
           <div class="row between"><h3>Hit rate by layer</h3>
@@ -999,20 +999,25 @@
   async function itemBrowser(host, meta, keys, k) {
     const cond = store.get("mala.itemCond", keys[0]);
     const c = keys.includes(cond) ? cond : keys[0];
+    const onlyTracked = store.get("mala.onlyTracked", false);
     host.innerHTML = `
       <div class="row between"><h3>Items</h3>
         <label class="field" for="item-cond" style="min-width:160px"><span class="sr">Condition</span>
           <select id="item-cond">${keys.map((x) => `<option value="${esc(x)}" ${x === c ? "selected" : ""}>${esc(meta.results.conditions[x].label)}</option>`).join("")}</select></label></div>
+      <label class="small" style="display:flex;gap:6px;align-items:center"><input type="checkbox" id="only-tracked" ${onlyTracked ? "checked" : ""}> Only items with a failure word (or other tracked word) in the top-10</label>
       <p class="small muted">Each square is a layer (${meta.layers.map((l) => `L${l}`).join(", ")}): filled where the target hit top-${k}. Tap an item to read it token by token, layer by layer.</p>
       <div id="item-detail"></div>
       <div class="stack-sm" id="item-list"><p class="small muted">Loading…</p></div>`;
     $("#item-cond", host).addEventListener("change", (e) => { store.set("mala.itemCond", e.target.value); itemBrowser(host, meta, keys, k); });
-    const items = await api(`/api/runs/${encodeURIComponent(meta.id)}/items?condition=${encodeURIComponent(c)}`);
+    $("#only-tracked", host).addEventListener("change", (e) => { store.set("mala.onlyTracked", e.target.checked); itemBrowser(host, meta, keys, k); });
+    let items = await api(`/api/runs/${encodeURIComponent(meta.id)}/items?condition=${encodeURIComponent(c)}`);
+    const tracked = (it) => Object.values(it.score.tracked || {}).some(Boolean);
+    if (onlyTracked) items = items.filter(tracked);
     items.sort((a, b) => Object.values(b.score.hits[k]).filter(Boolean).length - Object.values(a.score.hits[k]).filter(Boolean).length);
     const shown = items.slice(0, state.itemsShown || 20);
     $("#item-list", host).innerHTML = shown.map((it) => `
       <button class="itemrow" type="button" data-item="${it.i}">
-        <span><b class="mono">${esc(it.target)}</b>${it.visible ? "" : ` <span class="muted small">(multi-token)</span>`} <span class="o">${esc(it.output)}</span></span>
+        <span><b class="mono">${esc(it.target)}</b>${it.visible ? "" : ` <span class="muted small">(multi-token)</span>`}${tracked(it) ? ` <span class="w trk">failure word</span>` : ""} <span class="o">${esc(it.output)}</span></span>
         <span class="dots" aria-label="layers hit">${meta.layers.map((l) => `<i class="${it.score.hits[k][String(l)] ? "on" : ""}"></i>`).join("")}</span>
       </button>`).join("") + (items.length > shown.length ? `<div class="row between"><span class="small muted">${shown.length} of ${items.length} items, most hits first.</span><button class="btn ghost" id="more-items" type="button">Show more</button></div>` : "");
     const more = $("#more-items", host);
@@ -1024,11 +1029,14 @@
     host.innerHTML = `<p class="small muted">Loading…</p>`;
     const it = await api(`/api/runs/${encodeURIComponent(meta.id)}/items/${idx}`);
     const t = it.target.toLowerCase();
+    const trackSet = new Set((meta.spec_raw.match(/^also_track:\s*\[(.*)\]/m)?.[1] || "").split(",").map((x) => x.trim().toLowerCase()).filter(Boolean));
     const cell = (read) => {
       const words = read.words.map((w) => w.trim().toLowerCase());
       const r = words.indexOf(t);
-      const cls = r === 0 ? "top1" : r > -1 && r < Number(k) ? "hit" : "";
-      return `<td class="${cls}" title="${esc(read.words.slice(0, 10).map((w, i) => `${w} ${(read.probs[i] * 100).toFixed(1)}%`).join("\n"))}">${esc(read.words[0] || "")}</td>`;
+      const tr = words.slice(0, 10).findIndex((w) => trackSet.has(w));
+      const cls = r === 0 ? "top1" : r > -1 && r < Number(k) ? "hit" : tr > -1 ? "trk" : "";
+      const label = r > -1 && r < Number(k) ? read.words[r] : tr > -1 ? `${read.words[tr]} #${tr + 1}` : read.words[0] || "";
+      return `<td class="${cls}" title="${esc(read.words.slice(0, 10).map((w, i) => `${i + 1}. ${w} ${(read.probs[i] * 100).toFixed(1)}%`).join("\n"))}">${esc(label)}</td>`;
     };
     host.innerHTML = `
       <div class="panel stack-sm" style="background:var(--bg)">
@@ -1037,7 +1045,7 @@
         <p class="small"><span class="muted">Output:</span> ${esc(it.output)}</p>
         <div class="grid-scroll"><table class="cells"><thead><tr><th></th>${it.steps.map((s) => `<th>${esc(s.tok.trim() || "␣")}</th>`).join("")}</tr></thead>
           <tbody>${meta.layers.map((l, li) => `<tr><th>L${l}</th>${it.steps.map((s) => (s.reads ? cell(s.reads[li]) : "<td></td>")).join("")}</tr>`).join("")}</tbody></table></div>
-        <p class="small muted">Columns are the tokens the model wrote; rows are layers. Each cell shows the lens's top word; filled where it is “${esc(it.target)}”, outlined where “${esc(it.target)}” is in the top-${k}. Tap or hover a cell for its top 10.</p>
+        <p class="small muted">Columns are the tokens the model wrote; rows are layers. Each cell shows the lens's top word, or the target when it is in the top-${k} (filled at #1, outlined otherwise). Amber cells show a failure word (or other tracked word) in the top-10, with its rank. Tap or hover a cell for its top 10.</p>
         <p class="small" id="cell-top"></p>
       </div>`;
     $("#close-item", host).addEventListener("click", () => { host.innerHTML = ""; });
