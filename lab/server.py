@@ -375,6 +375,11 @@ async def start_run(body: RunIn) -> dict:
     seed = body.seed if body.seed is not None else random.randrange(1_000_000)
     cancel = asyncio.Event()
     state.runs[run_id] = cancel
+    # A placeholder record, so the run page opens at once; the runner replaces it.
+    store.save_run({"id": run_id, "experiment": body.experiment, "title": spec.get("title", body.experiment),
+                    "created": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()), "status": "running",
+                    "progress": {"done": 0, "total": 0}, "seed": seed, "limit": body.limit, "layers": [], "top_k": [],
+                    "spec_raw": raw, "model": "", "simulated": False})
 
     async def go() -> None:
         try:
