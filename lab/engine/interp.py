@@ -30,7 +30,7 @@ from .base import LayerRead, ModelInfo, Steer, Step, default_lens_layers
 class InterpEngine:
     def __init__(self, url: str, token: str | None, *, chat_kwargs: dict | None = None):
         headers = {"Authorization": f"Bearer {token}"} if token else {}
-        self._http = httpx.AsyncClient(base_url=url.rstrip("/"), headers=headers, timeout=httpx.Timeout(600, connect=20))
+        self._http = httpx.AsyncClient(base_url=url.rstrip("/"), headers=headers, timeout=httpx.Timeout(180, connect=20))
         # Qwen3 family: turn thinking off in the chat template.
         self._template_kwargs = chat_kwargs if chat_kwargs is not None else {"enable_thinking": False}
         self._info: ModelInfo | None = None

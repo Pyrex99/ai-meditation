@@ -182,6 +182,33 @@ def build_messages(spec: dict, cond: dict, values: dict) -> list[dict]:
     return msgs
 
 
+async def _retrying(meta: dict, attempt) -> dict:
+    """One retry for a dropped or failed request; after that the item is counted as failed
+    and the run carries on, so one bad connection can't sink a whole run."""
+    for n in range(2):
+        try:
+            return await attempt()
+        except Exception as e:  # network drops, proxy timeouts, server errors
+            last = f"{type(e).__name__}: {e}"
+            await asyncio.sleep(2)
+    meta["failed"] = meta.get("failed", 0) + 1
+    meta["last_failure"] = last[:300]
+    return {}
+
+
+def finalize(run_id: str) -> dict:
+    """Score whatever items are saved for a run (after a crash, a cancel or a stuck tail)."""
+    meta = store.load_run(run_id)
+    spec = yaml.safe_load(meta["spec_raw"])
+    items = store.load_run_items(run_id)
+    meta["results"] = aggregate(spec, items)
+    meta["progress"]["done"] = len(items)
+    if meta.get("status") != "complete":
+        meta["status"] = "partial" if len(items) < meta["progress"]["total"] else "complete"
+    store.save_run(meta)
+    return meta
+
+
 def new_run_id() -> str:
     return time.strftime("run-%Y%m%d-%H%M%S-", time.gmtime()) + uuid.uuid4().hex[:4]
 
@@ -279,6 +306,9 @@ async def run_readout(engine: Engine, name: str, raw: str, spec: dict, *, run_id
     sem, lock, done = asyncio.Semaphore(CONCURRENCY), asyncio.Lock(), 0
 
     async def one(idx, key, task, it):
+        return await _retrying(meta, lambda: _one(idx, key, task, it))
+
+    async def _one(idx, key, task, it):
         nonlocal done
         async with sem:
             if cancel.is_set():
@@ -355,6 +385,9 @@ async def run_experiment(engine: Engine, name: str, raw: str, spec: dict, *, run
     lock = asyncio.Lock()
 
     async def one(idx: int, key: str, cond: dict, vals: dict) -> dict:
+        return await _retrying(meta, lambda: _one(idx, key, cond, vals))
+
+    async def _one(idx: int, key: str, cond: dict, vals: dict) -> dict:
         nonlocal done
         async with sem:
             if cancel.is_set():

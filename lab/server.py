@@ -433,6 +433,17 @@ async def run_item(run_id: str, idx: int) -> dict:
     raise HTTPException(404, "No such item")
 
 
+@app.post("/api/runs/{run_id}/finalize", dependencies=[api])
+async def finalize_run(run_id: str) -> dict:
+    """Stop the run if it's going, and score the items that finished."""
+    ev = state.runs.pop(run_id, None)
+    if ev:
+        ev.set()
+    meta = experiments.finalize(run_id)
+    store.write_run_report(run_id, run_report(meta))
+    return {"status": meta["status"], "done": meta["progress"]["done"]}
+
+
 @app.post("/api/runs/{run_id}/cancel", dependencies=[api])
 async def cancel_run(run_id: str) -> dict:
     ev = state.runs.get(run_id)

@@ -889,6 +889,8 @@
           <p class="mono small muted">${esc(meta.id)} · seed ${esc(meta.seed)} · ${meta.limit ? `${meta.limit} items per condition` : "all items"} · ${esc(meta.status)}</p></div>
         ${meta.status === "running" ? `<div class="panel stack-sm"><div class="row between"><span class="small">${meta.progress.done} of ${meta.progress.total} generations</span><button class="btn ghost" id="cancel" type="button">Cancel</button></div><div class="progress"><i style="width:${pct}%"></i></div></div>` : ""}
         ${meta.status === "error" ? `<p class="err">The run stopped: ${esc(meta.error)}</p>` : ""}
+        ${meta.failed ? `<p class="small err">${meta.failed} generation${meta.failed === 1 ? "" : "s"} failed after a retry and ${meta.failed === 1 ? "is" : "are"} left out. Last error: ${esc(meta.last_failure || "")}</p>` : ""}
+        ${["running", "error", "cancelled", "partial"].includes(meta.status) ? `<div class="row"><button class="btn" id="finalize" type="button">Score what's finished</button><span class="small muted">Stops the run if it's stuck and scores every saved generation.</span></div>` : ""}
         ${res ? `
         <div class="panel stack">
           <div class="row between"><h3>Hit rate by layer</h3>
@@ -906,6 +908,8 @@
           <details><summary>Show report</summary><pre class="report" id="report-text">${esc(report)}</pre></details></div>` : ""}
       </div>`;
     $("#back").addEventListener("click", () => { state.run = null; state.exp = meta.experiment; render(); });
+    const fin = $("#finalize");
+    if (fin) fin.addEventListener("click", async () => { fin.disabled = true; try { await api(`/api/runs/${id}/finalize`, { method: "POST" }); viewRun(view, id); } catch (e) { alertInline(e.message); fin.disabled = false; } });
     const cancel = $("#cancel");
     if (cancel) cancel.addEventListener("click", () => api(`/api/runs/${id}/cancel`, { method: "POST" }).catch((e) => alertInline(e.message)));
     view.querySelectorAll("[data-k]").forEach((b) => b.addEventListener("click", () => { store.set("mala.k", b.dataset.k); viewRun(view, id); }));
