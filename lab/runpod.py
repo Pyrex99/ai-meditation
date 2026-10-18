@@ -25,7 +25,7 @@ MODEL_GB = 56  # Qwen3.6-27B in bf16 plus the lens, roughly
 # A small read-only status page on port 8001 shows progress: the log, the download size, the GPU.
 START = r"""
 set -e
-export HF_HOME=/workspace/hf PIP_CACHE_DIR=/workspace/pip-cache
+export HF_HOME=/workspace/hf PIP_CACHE_DIR=/workspace/pip-cache PATH=/workspace/ie/bin:$PATH
 S=/workspace/status; mkdir -p $S; : > $S/log.txt
 log() { echo "$(date -u +%H:%M:%S) $*" >> $S/log.txt; }
 (cd $S && python3 -m http.server 8001 >/dev/null 2>&1 &)
@@ -33,6 +33,7 @@ log() { echo "$(date -u +%H:%M:%S) $*" >> $S/log.txt; }
   du -sm /workspace/hf 2>/dev/null | cut -f1 > $S/hf_mb.txt
   nvidia-smi --query-gpu=name,memory.used,memory.total,utilization.gpu --format=csv,noheader,nounits > $S/gpu.txt 2>/dev/null || true
   tail -n 40 $S/engine.log > $S/engine_tail.txt 2>/dev/null || true
+  grep -E "Error:|Errno|error:" $S/engine.log 2>/dev/null | grep -v "^ *File" | tail -n 3 > $S/errors.txt || true
   sleep 10; done) &
 log "Pod up"
 cd /workspace
@@ -41,6 +42,8 @@ if [ ! -f ie/.installed ]; then
   { python3 -m venv ie && ./ie/bin/pip install -q 'interp-engine[vllm]' >> $S/engine.log 2>&1 && touch ie/.installed; } \
     || { log "Install failed; see the engine log"; sleep infinity; }
 fi
+# FlashInfer compiles kernels on first use and needs ninja on PATH.
+[ -x ie/bin/ninja ] || ./ie/bin/pip install -q ninja >> $S/engine.log 2>&1 || log "Couldn't install ninja"
 log "Starting interp-engine; downloading the model and lens if they aren't on storage yet"
 umask 077; printf '%s' "$IE_TOKEN" > /workspace/ie-token
 ./ie/bin/python -m interp_engine.server --model "$MODEL" --backend vllm \
@@ -126,7 +129,7 @@ async def pod_readout(pod_id: str) -> dict | None:
     out: dict = {}
     try:
         async with httpx.AsyncClient(timeout=10) as http:
-            for name in ("log.txt", "hf_mb.txt", "gpu.txt", "engine_tail.txt"):
+            for name in ("log.txt", "hf_mb.txt", "gpu.txt", "engine_tail.txt", "errors.txt"):
                 r = await http.get(f"{base}/{name}")
                 if r.status_code == 200:
                     out[name] = r.text
@@ -143,4 +146,5 @@ async def pod_readout(pod_id: str) -> dict | None:
         "gpu": {"name": gpu[0], "mem_used_mb": int(gpu[1]), "mem_total_mb": int(gpu[2]), "util": int(gpu[3])}
         if len(gpu) == 4 and gpu[1].isdigit() else None,
         "engine_tail": out.get("engine_tail.txt", "").strip().splitlines()[-6:],
+        "errors": [ln.split("] ", 1)[-1].strip() for ln in out.get("errors.txt", "").strip().splitlines()][-3:],
     }

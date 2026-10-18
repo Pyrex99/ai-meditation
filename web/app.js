@@ -687,6 +687,7 @@
         html += `<div class="stack-sm" style="margin-top:10px">`;
         if (dl !== null && r.engine !== "ready") html += `<div class="small">Model on storage: <b class="num">${dl} GB</b> of about ${ro.model_gb} GB</div><div class="progress"><i style="width:${Math.min(100, (100 * dl) / ro.model_gb)}%"></i></div>`;
         if (ro.gpu) html += `<div class="small">GPU ${esc(ro.gpu.name)} · memory ${Math.round(ro.gpu.mem_used_mb / 1024)} / ${Math.round(ro.gpu.mem_total_mb / 1024)} GB · busy ${ro.gpu.util}%</div>`;
+        if (ro.errors && ro.errors.length) html += `<div class="err small"><b>The model server hit an error:</b><br><span class="mono">${esc(ro.errors.join("\n")).replace(/\n/g, "<br>")}</span><br>Stop GPU, pull the latest code, and start again. If it repeats, paste this into the chat.</div>`;
         if (ro.log.length) html += `<pre class="report" style="max-height:160px">${esc(ro.log.join("\n"))}</pre>`;
         if (ro.engine_tail.length) html += `<details><summary>Engine log</summary><pre class="report" style="max-height:200px">${esc(ro.engine_tail.join("\n"))}</pre></details>`;
         html += `</div>`;
