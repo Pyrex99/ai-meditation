@@ -679,20 +679,32 @@
     $("#f-keys").addEventListener("submit", (e) => { e.preventDefault(); save(e.target, $("#keys-msg"), ["runpod_key", "anthropic_key", "openrouter_key", "openrouter_model"]); });
     const gpuMsg = (r) => {
       if (!r.pod_id) return "No GPU running. You're not being charged for compute.";
-      const p = r.pod || {};
-      const eng = { ready: "Model ready. Experiments now run on the real model.", loading: "Server up, loading the model…", starting: "Pod starting. The first start installs and downloads about 60 GB, so allow 20-40 minutes." }[r.engine] || "";
-      return `Pod <span class="mono">${esc(r.pod_id)}</span> ${esc(p.status || "")}${p.gpu ? ` · ${esc(p.gpu)}` : ""}${p.cost_per_hr ? ` · $${esc(p.cost_per_hr)}/hr` : ""}<br>${eng}${r.pod_error ? `<br><span class="err">${esc(r.pod_error)}</span>` : ""}`;
+      const p = r.pod || {}, ro = r.readout;
+      const eng = { ready: "<b>Model ready.</b> Experiments now run on the real model.", loading: "Server up, loading the model onto the GPU…", starting: "Starting. The first start installs and downloads about 60 GB, so allow 20-40 minutes." }[r.engine] || "";
+      let html = `Pod <span class="mono">${esc(r.pod_id)}</span> ${esc(p.status || "")}${p.gpu ? ` · ${esc(p.gpu)}` : ""}${p.cost_per_hr ? ` · $${esc(p.cost_per_hr)}/hr` : ""} <span class="muted">· checked ${esc(r.checked_at)}</span><br>${eng}`;
+      if (ro) {
+        const dl = ro.downloaded_gb;
+        html += `<div class="stack-sm" style="margin-top:10px">`;
+        if (dl !== null && r.engine !== "ready") html += `<div class="small">Model on storage: <b class="num">${dl} GB</b> of about ${ro.model_gb} GB</div><div class="progress"><i style="width:${Math.min(100, (100 * dl) / ro.model_gb)}%"></i></div>`;
+        if (ro.gpu) html += `<div class="small">GPU ${esc(ro.gpu.name)} · memory ${Math.round(ro.gpu.mem_used_mb / 1024)} / ${Math.round(ro.gpu.mem_total_mb / 1024)} GB · busy ${ro.gpu.util}%</div>`;
+        if (ro.log.length) html += `<pre class="report" style="max-height:160px">${esc(ro.log.join("\n"))}</pre>`;
+        if (ro.engine_tail.length) html += `<details><summary>Engine log</summary><pre class="report" style="max-height:200px">${esc(ro.engine_tail.join("\n"))}</pre></details>`;
+        html += `</div>`;
+      } else if (r.engine !== "ready") {
+        html += `<br><span class="small muted">No progress readout from this pod yet. Pods started before this update don't have one; it appears within a minute on new pods.</span>`;
+      }
+      return html + (r.pod_error ? `<br><span class="err">${esc(r.pod_error)}</span>` : "");
     };
     let gpuTimer = 0;
     const gpuCall = async (action) => {
       const msg = $("#pod-msg"); if (!msg) return;
       clearTimeout(gpuTimer);
-      if (action !== "status") msg.textContent = "Asking RunPod…";
+      msg.insertAdjacentHTML("afterbegin", `<span class="small muted" data-checking>Checking… </span>`);
       try {
         const r = await api("/api/gpu", { method: "POST", body: { action, data_center: $("#dc")?.value.trim() } });
         if (action === "setup" || action === "start" || action === "stop") return viewLab(view);
         msg.innerHTML = gpuMsg(r);
-        if (r.pod_id && r.engine !== "ready") gpuTimer = setTimeout(() => currentTab() === "lab" && gpuCall("status"), 15000);
+        if (r.pod_id) gpuTimer = setTimeout(() => currentTab() === "lab" && gpuCall("status"), r.engine === "ready" ? 60000 : 15000);
         else if (r.engine === "ready") { state.status = await api("/api/status"); setChip(); }
       } catch (e) { msg.innerHTML = `<span class="err">${esc(e.message)}</span>`; }
     };

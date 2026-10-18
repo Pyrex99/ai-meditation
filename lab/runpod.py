@@ -18,20 +18,36 @@ DEFAULT_IMAGE = "runpod/pytorch:2.8.0-py3.11-cuda12.8.1-cudnn-devel-ubuntu22.04"
 DEFAULT_MODEL = "Qwen/Qwen3.6-27B"
 DEFAULT_LENS = "hf://koayon/jpp-lenses/qwen3.6-27b/lens.pt"
 PORT = 8000
+STATUS_PORT = 8001
+MODEL_GB = 56  # Qwen3.6-27B in bf16 plus the lens, roughly
 
 # Runs inside the pod. Installs interp-engine onto the volume the first time, then serves.
+# A small read-only status page on port 8001 shows progress: the log, the download size, the GPU.
 START = r"""
 set -e
 export HF_HOME=/workspace/hf PIP_CACHE_DIR=/workspace/pip-cache
+S=/workspace/status; mkdir -p $S; : > $S/log.txt
+log() { echo "$(date -u +%H:%M:%S) $*" >> $S/log.txt; }
+(cd $S && python3 -m http.server 8001 >/dev/null 2>&1 &)
+(while true; do
+  du -sm /workspace/hf 2>/dev/null | cut -f1 > $S/hf_mb.txt
+  nvidia-smi --query-gpu=name,memory.used,memory.total,utilization.gpu --format=csv,noheader,nounits > $S/gpu.txt 2>/dev/null || true
+  tail -n 40 $S/engine.log > $S/engine_tail.txt 2>/dev/null || true
+  sleep 10; done) &
+log "Pod up"
 cd /workspace
 if [ ! -f ie/.installed ]; then
-  python3 -m venv ie && ./ie/bin/pip install -q 'interp-engine[vllm]' && touch ie/.installed
+  log "Installing interp-engine and vLLM (first start only, about 10 minutes)"
+  { python3 -m venv ie && ./ie/bin/pip install -q 'interp-engine[vllm]' >> $S/engine.log 2>&1 && touch ie/.installed; } \
+    || { log "Install failed; see the engine log"; sleep infinity; }
 fi
+log "Starting interp-engine; downloading the model and lens if they aren't on storage yet"
 umask 077; printf '%s' "$IE_TOKEN" > /workspace/ie-token
-exec ./ie/bin/python -m interp_engine.server --model "$MODEL" --backend vllm \
-  --host 0.0.0.0 --port 8000 --token-file /workspace/ie-token --lens-jacobians "$LENS"
+./ie/bin/python -m interp_engine.server --model "$MODEL" --backend vllm \
+  --host 0.0.0.0 --port 8000 --token-file /workspace/ie-token --lens-jacobians "$LENS" >> $S/engine.log 2>&1 \
+  || log "interp-engine exited with an error; see the engine log"
+sleep infinity
 """
-
 
 async def _call(method: str, key: str, path: str, body: dict | None = None) -> dict | list:
     async with httpx.AsyncClient(timeout=60) as http:
@@ -64,12 +80,13 @@ async def start_pod(key: str, cfg: dict) -> dict:
         "imageName": cfg.get("runpod_image") or DEFAULT_IMAGE,
         "cloudType": "SECURE",
         "gpuTypeIds": GPU_TYPES,
+        "gpuTypePriority": "custom",  # A100s first; H100s only when none are free
         "gpuCount": 1,
         "networkVolumeId": cfg["network_volume_id"],
         "dataCenterIds": [cfg["data_center"]],
         "volumeMountPath": "/workspace",
         "containerDiskInGb": 40,
-        "ports": [f"{PORT}/http"],
+        "ports": [f"{PORT}/http", f"{STATUS_PORT}/http"],
         "env": env,
         "dockerStartCmd": ["bash", "-c", START],
     }
@@ -101,3 +118,29 @@ async def engine_health(url: str) -> str:
         return "loading" if r.status_code == 503 else "starting"
     except httpx.HTTPError:
         return "starting"
+
+
+async def pod_readout(pod_id: str) -> dict | None:
+    """What the pod's status page says, or None if it has none (an older pod) or isn't up yet."""
+    base = f"https://{pod_id}-{STATUS_PORT}.proxy.runpod.net"
+    out: dict = {}
+    try:
+        async with httpx.AsyncClient(timeout=10) as http:
+            for name in ("log.txt", "hf_mb.txt", "gpu.txt", "engine_tail.txt"):
+                r = await http.get(f"{base}/{name}")
+                if r.status_code == 200:
+                    out[name] = r.text
+    except httpx.HTTPError:
+        return None
+    if not out:
+        return None
+    gpu = [x.strip() for x in out.get("gpu.txt", "").split(",")]
+    mb = out.get("hf_mb.txt", "").strip()
+    return {
+        "log": out.get("log.txt", "").strip().splitlines()[-8:],
+        "downloaded_gb": round(int(mb) / 1024, 1) if mb.isdigit() else None,
+        "model_gb": MODEL_GB,
+        "gpu": {"name": gpu[0], "mem_used_mb": int(gpu[1]), "mem_total_mb": int(gpu[2]), "util": int(gpu[3])}
+        if len(gpu) == 4 and gpu[1].isdigit() else None,
+        "engine_tail": out.get("engine_tail.txt", "").strip().splitlines()[-6:],
+    }

@@ -9,6 +9,7 @@ from the internet (a RunPod proxy URL is), because the server holds your API key
 from __future__ import annotations
 
 import asyncio
+import time
 import json
 import os
 import random
@@ -505,6 +506,8 @@ async def gpu(body: GpuIn) -> dict:
         except RuntimeError as e:
             out["pod_error"] = str(e)
         out["engine"] = await runpod.engine_health(cfg["interp_url"])
+        out["readout"] = await runpod.pod_readout(cfg["pod_id"])
+    out["checked_at"] = time.strftime("%H:%M:%S")
     return out
 
 
