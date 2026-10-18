@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import gzip
 import json
 import os
 from pathlib import Path
@@ -95,10 +96,23 @@ def append_run_item(run_id: str, item: dict) -> None:
 
 
 def load_run_items(run_id: str) -> list[dict]:
+    """The raw items. items.jsonl is written during the run; items.jsonl.gz is the copy that
+    goes to GitHub, so a fresh clone on another computer reads that."""
     p = run_dir(run_id) / "items.jsonl"
-    if not p.is_file():
+    if p.is_file():
+        text = p.read_text()
+    elif p.with_suffix(".jsonl.gz").is_file():
+        text = gzip.decompress(p.with_suffix(".jsonl.gz").read_bytes()).decode()
+    else:
         return []
-    return [json.loads(line) for line in p.read_text().splitlines() if line.strip()]
+    return [json.loads(line) for line in text.splitlines() if line.strip()]
+
+
+def compress_run_items(run_id: str) -> None:
+    """Write items.jsonl.gz beside items.jsonl (about a tenth of the size), for syncing."""
+    p = run_dir(run_id) / "items.jsonl"
+    if p.is_file():
+        p.with_suffix(".jsonl.gz").write_bytes(gzip.compress(p.read_bytes(), mtime=0))
 
 
 def list_runs() -> list[dict]:

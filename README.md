@@ -58,6 +58,12 @@ The app runs on your computer. The GPU is rented from RunPod only while you expe
 
 `runpod/setup.sh` is the manual alternative: everything on one pod, the app included.
 
+## Results on GitHub
+
+`./sync.sh` commits experiments and results (run records, reports, compressed raw items) and
+pushes them, after pulling anything new. Keys never go: `keys.env` and `data/config.json` are
+ignored. See `docs/HANDOFF.md` for where things stand.
+
 ## Keys, once
 
 Copy `keys.env.example` to `keys.env` in the repo (gitignored) or to

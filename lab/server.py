@@ -386,6 +386,8 @@ async def start_run(body: RunIn) -> dict:
             runner = experiments.run_readout if spec.get("kind") == "readout" else experiments.run_experiment
             meta = await runner(engine, body.experiment, raw, spec, run_id=run_id, limit=body.limit, seed=seed, cancel=cancel)
             store.write_run_report(run_id, run_report(meta, store.load_run_items(run_id)))
+    store.compress_run_items(run_id)
+            store.compress_run_items(run_id)
         except Exception as e:
             try:
                 meta = store.load_run(run_id)
@@ -441,6 +443,7 @@ async def finalize_run(run_id: str) -> dict:
         ev.set()
     meta = experiments.finalize(run_id)
     store.write_run_report(run_id, run_report(meta, store.load_run_items(run_id)))
+    store.compress_run_items(run_id)
     return {"status": meta["status"], "done": meta["progress"]["done"]}
 
 

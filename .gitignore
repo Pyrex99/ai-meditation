@@ -1,4 +1,7 @@
-/data/
+# Data goes to GitHub (runs, sits, reports), except secrets and the big uncompressed raw files.
+/data/config.json
+/data/**/items.jsonl
+/data/**/*.tmp
 /out/
 prereg/*.lock.json.bak
 __pycache__/

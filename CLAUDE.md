@@ -1,7 +1,7 @@
 # Mala Lab: notes for Claude
 
 A lab for workspace-lens experiments and contemplative practice in language models. Read
-`docs/VISION.md` first. The current work is replicating the J++ focus/suppress result
+`docs/HANDOFF.md` (current state and results), then `docs/VISION.md`. The current work is replicating the J++ focus/suppress result
 (`experiments/directed-modulation.yaml`) before anything new.
 
 ## Layout
@@ -14,7 +14,10 @@ A lab for workspace-lens experiments and contemplative practice in language mode
   `/v1/capture`, `/v1/tokenize`, `/v1/generate`) and `sim.py` (a toy workspace, no GPU).
 - `lab/sit.py` runs a sit. `lab/scoring.py` is pure functions of the stored stream.
 - `lab/server.py` is FastAPI. It serves `web/` (vanilla JS, no build step).
-- Data: `data/sits/<id>/{meta.json,stream.jsonl,report.md}`, plus `data/reports/<id>.md`.
+- Data: `data/sits/<id>/{meta.json,stream.jsonl,report.md}`, plus `data/reports/<id>.md`. Data is on
+  GitHub via `./sync.sh`; raw run items as `items.jsonl.gz` (`store.load_run_items` reads either).
+  Never commit `data/config.json` or `keys.env`.
+- The app runs on Python 3.11 on the user's Mac: test with 3.11.
 
 ## Rules
 
