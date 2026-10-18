@@ -850,7 +850,7 @@
       <div class="stack">
         <div class="row"><button class="btn ghost" id="back" type="button">← Experiments</button></div>
         <div class="stack-sm"><h2>${esc(e.title)}</h2><p class="lede">${esc(e.description)}</p>
-          <p class="mono small muted">${esc(e.name)} · ${e.n_conditions} conditions × ${e.n_items} items · spec ${esc(e.sha256.slice(0, 12))}</p></div>
+          <p class="mono small muted">${esc(e.name)} · ${e.n_conditions} conditions × ${e.n_items} items${e.n_generations && e.n_generations !== e.n_conditions * e.n_items ? ` (with wordings, ${e.n_generations} generations)` : ""} · spec ${esc(e.sha256.slice(0, 12))}</p></div>
         ${e.errors.length ? `<p class="err">${esc(e.errors.join(" "))}</p>` : ""}
         <div class="panel stack-sm">
           <h3>Run</h3>

@@ -109,7 +109,7 @@ def run_report(meta: dict, items: list[dict] | None = None) -> str:
             lines.append(f"| {label} | " + " | ".join(f"{tr[str(l)]['k']}/{tr[str(l)]['n']}" for l in layers) + " |")
         lines.append("")
     if items:
-        lines += _readout_best(meta, res) if meta.get("kind") == "readout" else _per_position(meta, items)
+        lines += _readout_best(meta, res) if meta.get("kind") == "readout" else _per_position(meta, items) + _sustain(meta, items)
         lines += _examples(meta, items)
     lines += ["## Spec", "", "```yaml", meta["spec_raw"].strip(), "```", "",
               "Raw data: items.jsonl (every prompt, output and per-token readout) is primary. Cite the run id."]
@@ -177,6 +177,77 @@ def _per_position(meta: dict, items: list[dict]) -> list[str]:
         cells = [f"{h / n * 100:.1f}%" if n else "n/a" for h in hits]
         out.append(f"| {label} | {n} | " + " | ".join(cells) + " |")
     return out + [""]
+
+
+def _units(steps: list[dict]) -> list[list[dict]]:
+    """Generated steps grouped into written characters. A character split across tokens (📿 is
+    three in Qwen) ends at the step that completes it; runs without decoded text use one step each."""
+    out, cur = [], []
+    for st in steps:
+        if not st.get("reads"):
+            continue
+        cur.append(st)
+        if "text" not in st or st["text"]:
+            out.append(cur)
+            cur = []
+    return out + ([cur] if cur else [])
+
+
+SUSTAIN_BINS = [(1, 1), (2, 4), (5, 8), (9, 16), (17, 32), (33, 10_000)]
+
+
+def _sustain(meta: dict, items: list[dict]) -> list[str]:
+    """Does the target stay across the output, or appear on a few beads only? A bead (written
+    character) is a hit when the target is in the top-10 at any of its tokens."""
+    layers = meta["layers"]
+    k = 10
+    labels = {key: c["label"] for key, c in (meta.get("results") or {}).get("conditions", {}).items()}
+    per_item: dict[str, list[list[list[bool]]]] = {}
+    for key in labels:
+        per_item[key] = []
+        for it in items:
+            if it["condition"] != key or not it.get("visible", True):
+                continue
+            t = it["target"].lower()
+            per_item[key].append([[any(t in [w.strip().lower() for w in st["reads"][li]["words"][:k]] for st in u)
+                                   for li in range(len(layers))] for u in _units(it["steps"])])
+    head = "| Condition | items | " + " | ".join(f"L{l}" for l in layers) + " |"
+    rule = "|---|---|" + "---|" * len(layers)
+
+    def table(skip_first: bool) -> list[str]:
+        rows = []
+        for key, label in labels.items():
+            cells = []
+            for li in range(len(layers)):
+                shares = [sum(u[li] for u in us[skip_first:]) / len(us[skip_first:]) for us in per_item[key] if us[skip_first:]]
+                cells.append(f"{sum(shares) / len(shares) * 100:.1f}%" if shares else "n/a")
+            rows.append(f"| {label} | {len(per_item[key])} | " + " | ".join(cells) + " |")
+        return rows
+
+    deep = len(layers) - 1
+    out = [f"## Sustain: share of beads with the target in the top-{k} (mean over items)", "",
+           "A bead is one written character, however many tokens it takes. High item hit rates with low",
+           "sustain mean the word shows on a few beads only."]
+    if not any("text" in st for it in items for st in it["steps"]):
+        out += ["This run has no decoded text, so each token counts as a bead here."]
+    out += ["", head, rule, *table(False), "",
+           "### Leaving out the first bead (where the instruction is closest)", "", head, rule, *table(True), "",
+           f"### By bead position, L{layers[deep]}", "",
+           "Hit rate per bead, pooled over items (beads in each range in brackets).", "",
+           "| Condition | " + " | ".join(f"{a}" if a == b else (f"{a}+" if b >= 10_000 else f"{a}-{b}") for a, b in SUSTAIN_BINS) + " |",
+           "|---|" + "---|" * len(SUSTAIN_BINS)]
+    for key, label in labels.items():
+        cells = []
+        for a, b in SUSTAIN_BINS:
+            hs = [u[deep] for us in per_item[key] for u in us[a - 1:b]]
+            cells.append(f"{sum(hs) / len(hs) * 100:.1f}% ({len(hs)})" if hs else "n/a")
+        out.append(f"| {label} | " + " | ".join(cells) + " |")
+    held = []
+    for key, label in labels.items():
+        n = sum(1 for us in per_item[key] if us and sum(u[deep] for u in us) / len(us) >= 0.5)
+        held.append(f"{label} {n}/{len(per_item[key])}")
+    out += ["", f"Items with the target on at least half their beads at L{layers[deep]}: " + ", ".join(held) + ".", ""]
+    return out
 
 
 def _example_block(meta: dict, it: dict, track: set[str]) -> list[str]:

@@ -146,3 +146,22 @@ def test_run_reports_render_with_examples():
 
 def test_server_imports():
     import lab.server  # noqa: F401  (a syntax error here kept the app from starting)
+
+
+def test_instruction_wordings_and_sustain():
+    from lab import experiment as E
+    from lab.report import _sustain, _units
+
+    raw, spec = E.load("silent-mantra-dots")
+    assert E.validate(spec) == []
+    assert E.n_generations(spec) == 20 * (3 + 3 + 3 + 1)
+    meta = asyncio.run(E.run_experiment(SimEngine(), "silent-mantra-dots", raw, spec, run_id="run-test-smd",
+                                        limit=2, seed=1, cancel=asyncio.Event()))
+    assert meta["status"] == "complete" and meta["progress"]["done"] == 2 * 10
+    items = store.load_run_items("run-test-smd")
+    assert sorted({it["vars"].get("wording") for it in items if it["condition"] == "focus"}) == [1, 2, 3]
+    assert "Sustain" in "\n".join(_sustain(meta, items))
+    # A character split across tokens is one bead, ending on the piece that completes it.
+    steps = [{"reads": [], "tok": "�", "text": ""}, {"reads": [1], "tok": "�", "text": ""},
+             {"reads": [1], "tok": "�", "text": "📿"}, {"reads": [1], "tok": " a"}]
+    assert [len(u) for u in _units(steps)] == [2, 1]

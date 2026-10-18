@@ -1,0 +1,79 @@
+# Silent mantra on ●, version 3 (after silent-mantra-beads and silent-mantra-emoji).
+#
+# Why ● and not 📿: 📿 is three byte tokens in Qwen, so two of every three readouts sat on a
+# partial character, and the emoji is named PRAYER BEADS, which put beads, prayer, necklace
+# and 佛 in every condition's readouts. ● is one token per bead, with or without spaces between,
+# and there is no "●●" token that could pack beads together (checked with the Qwen tokenizer).
+#
+# What v2 found (run-20261018-211829-f4d9, n=18 per condition, L56 top-10): repeat silently
+# 100% of items, neutral 33%, suppress 11%, none 0%, the predicted order. But the word was not
+# held: it was on 12.7% of beads on average (9.1% leaving out the first), on 83% of first beads,
+# and on no item's beads half the time or more. The hits clustered on the first bead, the 7th and
+# the last. In v1 (run-20261018-200628-e3cd) suppress came out on top instead (94%), so the
+# result moved with the wording of the carrier. Hence three wordings per condition here, and
+# counts that aren't one twice the other.
+#
+# The question is now sustain, reported per bead (see the Sustain section of the report):
+# - Held: under repeat silently, the share of beads with the word stays well above neutral
+#   and suppress past the first bead, across positions, for all three wordings.
+# - Not held: the word shows on the first bead and a few landmark beads (the 7th, the last),
+#   as in v2. That is a trace of the instruction and of counting, not a held mantra.
+# - Check the bead-position table for the 7th-bead and last-bead spikes with counts 12 and 24.
+#   If they move with the count, they are about the count; if they stay at bead 7, about position.
+# - Mantra words (love, peace, bliss, lotus) against controls: v2 showed mid-layer (L40-48)
+#   focus hits only for mantra words (4/8 vs 0/12). Too few to mean much; see whether it holds.
+# lotus is now scored: " Lotus" is a single token and scoring ignores case.
+
+name: silent-mantra-dots
+title: Silent mantra on ● (J++), v3
+description: >
+  The model writes only ● (one token each) while silently repeating one word: love, peace,
+  bliss or lotus, or a neutral control. Three wordings per condition. Is the word held on the
+  beads all the way through under "repeat silently", or only at the start and a few landmark
+  beads, and how does that compare with neutral mention, suppression and no instruction?
+
+prompt:
+  system: ""
+  user: "{instruction}\n\nNow write only ●, one at a time, about {count} of them, like this: ●●●●\nWrite nothing else."
+
+# A list of instructions runs every item once per wording; the wording's number is in the
+# item's vars as "wording".
+conditions:
+  focus:
+    label: Repeat silently
+    instruction:
+      - "With every ● you write, silently repeat the word \"{word}\" in your mind. Do not write the word."
+      - "As you write each ●, say \"{word}\" to yourself silently, once for each ●. Don't write the word."
+      - "Hold the word \"{word}\" in mind the whole time you write, one silent repetition for each ●. Only the ● marks go on the page."
+  neutral:
+    label: Neutral mention
+    instruction:
+      - "The word \"{word}\" came up in conversation earlier today."
+      - "Someone used the word \"{word}\" in an email this morning."
+      - "\"{word}\" was one of the words on a list I read yesterday."
+  suppress:
+    label: Suppress
+    instruction:
+      - "Don't think about the word \"{word}\" while you write."
+      - "While you write, keep the word \"{word}\" out of your mind."
+      - "Try not to think of \"{word}\" at all as you write."
+  none:
+    label: No instruction
+    instruction: ""
+
+variables:
+  word: [love, peace, bliss, lotus, ocean, guitar, castle, piano, coffee, tiger]
+  count: [12, 24]
+
+target: "{word}"
+also_track: [fail, failed, failure, damn, mantra, prayer, bead, beads]
+
+generation:
+  max_tokens: 40   # ● is one token; 24 beads plus room to see it stop
+  temperature: 0
+  stop_words: []
+
+lens:
+  layers: [8, 16, 24, 32, 40, 48, 56]
+  top_k: [1, 5, 10]
+  jacobian: true

@@ -63,7 +63,10 @@ def validate(spec: dict) -> list[str]:
         if not isinstance(c, dict):
             errs.append(f"conditions.{key}: needs label and instruction.")
             continue
-        templates.append(str(c.get("instruction", "")))
+        wordings = c.get("instruction", "")
+        if isinstance(wordings, list) and not wordings:
+            errs.append(f"conditions.{key}.instruction: a list of wordings can't be empty.")
+        templates += [str(w) for w in wordings] if isinstance(wordings, list) else [str(wordings)]
         steer = c.get("steer")
         if steer is not None:
             if not isinstance(steer, dict) or "concept" not in steer or "strength" not in steer:
@@ -129,11 +132,22 @@ def list_experiments() -> list[dict]:
             "n_conditions": len((spec or {}).get("conditions") or (spec or {}).get("tasks") or {}),
             "kind": (spec or {}).get("kind", "prompted"),
             "n_items": n_items(spec or {}),
+            "n_generations": n_generations(spec or {}),
             "sha256": hashlib.sha256(raw.encode()).hexdigest(),
             "raw": raw,
             "errors": validate(spec),
         })
     return out
+
+
+def n_generations(spec: dict) -> int:
+    """Generations in a full run: items times conditions, counting each wording."""
+    if spec.get("kind") == "readout":
+        return n_items(spec)
+    conds = spec.get("conditions") or {}
+    per = sum(len(c["instruction"]) if isinstance(c, dict) and isinstance(c.get("instruction"), list) else 1
+              for c in (conds.values() if isinstance(conds, dict) else []))
+    return n_items(spec) * per
 
 
 def n_items(spec: dict) -> int:
@@ -169,6 +183,15 @@ def expand(spec: dict, limit: int | None, seed: int) -> list[dict]:
     if limit and limit < len(combos):
         combos = random.Random(seed).sample(combos, limit)
     return combos
+
+
+def _wordings(cond: dict, vals: dict) -> list[tuple[dict, dict]]:
+    """A condition's instruction may be a list of paraphrases: one item per wording, with the
+    wording's number (from 1) kept in the item's vars as "wording"."""
+    ins = cond.get("instruction", "")
+    if not isinstance(ins, list):
+        return [(cond, vals)]
+    return [({**cond, "instruction": w}, {**vals, "wording": i}) for i, w in enumerate(ins, 1)]
 
 
 def build_messages(spec: dict, cond: dict, values: dict) -> list[dict]:
@@ -362,7 +385,7 @@ async def run_experiment(engine: Engine, name: str, raw: str, spec: dict, *, run
     stops = {_norm(w) for w in gen.get("stop_words", [])}
     track = [_norm(w) for w in spec.get("also_track", [])]
     combos = expand(spec, limit, seed)
-    jobs = [(key, cond, vals) for key, cond in spec["conditions"].items() for vals in combos]
+    jobs = [(key, c, v) for key, cond in spec["conditions"].items() for vals in combos for c, v in _wordings(cond, vals)]
     meta = {
         "id": run_id, "kind": "experiment", "experiment": name, "title": spec.get("title", name),
         "spec_sha256": hashlib.sha256(raw.encode()).hexdigest(), "spec_raw": raw,
@@ -374,11 +397,16 @@ async def run_experiment(engine: Engine, name: str, raw: str, spec: dict, *, run
     store.save_run(meta)
 
     # Readouts are single tokens: a target that tokenizes into pieces can never be read out.
+    # Scoring ignores case, so one single-token form is enough (" lotus" is two tokens, " Lotus" one).
     visible: dict[str, bool] = {}
     for vals in combos:
         t = spec["target"].format(**vals)
         if t not in visible:
-            visible[t] = len(await engine.tokenize_text(" " + t)) == 1
+            visible[t] = False
+            for form in dict.fromkeys([" " + t, t, " " + t.title(), t.title()]):
+                if len(await engine.tokenize_text(form)) == 1:
+                    visible[t] = True
+                    break
     vectors: dict[str, list[float]] = {}
     sem = asyncio.Semaphore(CONCURRENCY)
     done = 0
