@@ -35,7 +35,13 @@ class SpecError(ValueError):
 
 
 def _fields(template: str) -> set[str]:
-    return {f for _, f, _, _ in string.Formatter().parse(template) if f}
+    """Variable names a template uses; "{mantra[text]}" uses "mantra"."""
+    return {re.split(r"[\[.]", f)[0] for _, f, _, _ in string.Formatter().parse(template) if f}
+
+
+def target_words(target: str) -> list[str]:
+    """A target may be a phrase ("om ah hum"): each word is scored, and a hit is any of them."""
+    return list(dict.fromkeys(w.lower() for w in re.split(r"[\s,]+", target.strip()) if w))
 
 
 def validate(spec: dict) -> list[str]:
@@ -58,7 +64,7 @@ def validate(spec: dict) -> list[str]:
         errs.append("variables: each variable needs a non-empty list of values.")
         variables = {}
     known = set(variables) | {"instruction"}
-    templates = [prompt.get("user", ""), prompt.get("system", "") or "", str(spec.get("target", ""))]
+    templates = [prompt.get("user", ""), prompt.get("system", "") or "", str(spec.get("target", "")), str(spec.get("expect", ""))]
     for key, c in conds.items() if isinstance(conds, dict) else []:
         if not isinstance(c, dict):
             errs.append(f"conditions.{key}: needs label and instruction.")
@@ -241,8 +247,8 @@ def _norm(w: str) -> str:
 
 
 def score_item(steps: list[dict], target: str, track: list[str], layers: list[int], ks: list[int]) -> dict:
-    """Per layer: the best rank the target reached over generated tokens, and hits at each k."""
-    t = _norm(target)
+    """Per layer: the best rank any target word reached over generated tokens, and hits at each k."""
+    ts = set(target_words(target))
     best: dict[int, int | None] = {}
     tracked: dict[int, bool] = {}
     for li, layer in enumerate(layers):
@@ -252,8 +258,9 @@ def score_item(steps: list[dict], target: str, track: list[str], layers: list[in
             if not s.get("reads"):
                 continue
             words = [_norm(w) for w in s["reads"][li]["words"]]
-            if t in words:
-                ranks.append(words.index(t) + 1)
+            at = [i for i, w in enumerate(words) if w in ts]
+            if at:
+                ranks.append(at[0] + 1)
             if any(w in track for w in words[: max(ks)]):
                 seen_track = True
         best[layer] = min(ranks) if ranks else None
@@ -398,15 +405,23 @@ async def run_experiment(engine: Engine, name: str, raw: str, spec: dict, *, run
 
     # Readouts are single tokens: a target that tokenizes into pieces can never be read out.
     # Scoring ignores case, so one single-token form is enough (" lotus" is two tokens, " Lotus" one).
+    # A phrase target is visible only if every word is.
+    one_token: dict[str, bool] = {}
+
+    async def readable(w: str) -> bool:
+        if w not in one_token:
+            one_token[w] = False
+            for form in dict.fromkeys([" " + w, w, " " + w.title(), w.title()]):
+                if len(await engine.tokenize_text(form)) == 1:
+                    one_token[w] = True
+                    break
+        return one_token[w]
+
     visible: dict[str, bool] = {}
     for vals in combos:
         t = spec["target"].format(**vals)
         if t not in visible:
-            visible[t] = False
-            for form in dict.fromkeys([" " + t, t, " " + t.title(), t.title()]):
-                if len(await engine.tokenize_text(form)) == 1:
-                    visible[t] = True
-                    break
+            visible[t] = all([await readable(w) for w in target_words(t)])
     vectors: dict[str, list[float]] = {}
     sem = asyncio.Semaphore(CONCURRENCY)
     done = 0
@@ -456,6 +471,8 @@ async def run_experiment(engine: Engine, name: str, raw: str, spec: dict, *, run
                 "target": target, "visible": visible[target], "steps": steps,
                 "score": score_item(steps, target, track, layers, ks),
             }
+            if spec.get("expect"):
+                item["expect"] = spec["expect"].format(**vals)
             store.append_run_item(run_id, item)
             async with lock:
                 done += 1

@@ -1032,11 +1032,11 @@
   async function itemDetail(host, meta, idx, k) {
     host.innerHTML = `<p class="small muted">Loading…</p>`;
     const it = await api(`/api/runs/${encodeURIComponent(meta.id)}/items/${idx}`);
-    const t = it.target.toLowerCase();
+    const targets = new Set(it.target.toLowerCase().split(/[\s,]+/).filter(Boolean)); // a phrase target scores each word
     const trackSet = new Set((meta.spec_raw.match(/^also_track:\s*\[(.*)\]/m)?.[1] || "").split(",").map((x) => x.trim().toLowerCase()).filter(Boolean));
     const cell = (read) => {
       const words = read.words.map((w) => w.trim().toLowerCase());
-      const r = words.indexOf(t);
+      const r = words.findIndex((w) => targets.has(w));
       const tr = words.slice(0, 10).findIndex((w) => trackSet.has(w));
       const cls = r === 0 ? "top1" : r > -1 && r < Number(k) ? "hit" : tr > -1 ? "trk" : "";
       const label = r > -1 && r < Number(k) ? read.words[r] : tr > -1 ? `${read.words[tr]} #${tr + 1}` : read.words[0] || "";

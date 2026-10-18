@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from . import detok
+from .experiment import target_words
 
 
 def _rate(d: dict) -> str:
@@ -110,6 +111,8 @@ def run_report(meta: dict, items: list[dict] | None = None) -> str:
         lines.append("")
     if items:
         lines += _readout_best(meta, res) if meta.get("kind") == "readout" else _per_position(meta, items) + _sustain(meta, items)
+        if any(it.get("expect") for it in items):
+            lines += _recitation(meta, items)
         lines += _examples(meta, items)
     lines += ["## Spec", "", "```yaml", meta["spec_raw"].strip(), "```", "",
               "Raw data: items.jsonl (every prompt, output and per-token readout) is primary. Cite the run id."]
@@ -166,13 +169,13 @@ def _per_position(meta: dict, items: list[dict]) -> list[str]:
         n = 0
         hits = [0] * len(layers)
         for it in rows:
-            t = it["target"].lower()
+            ts = set(target_words(it["target"]))
             for st in it["steps"]:
                 if not st.get("reads"):
                     continue
                 n += 1
                 for li, r in enumerate(st["reads"]):
-                    if t in [w.strip().lower() for w in r["words"][:k]]:
+                    if ts & {w.strip().lower() for w in r["words"][:k]}:
                         hits[li] += 1
         cells = [f"{h / n * 100:.1f}%" if n else "n/a" for h in hits]
         out.append(f"| {label} | {n} | " + " | ".join(cells) + " |")
@@ -208,8 +211,8 @@ def _sustain(meta: dict, items: list[dict]) -> list[str]:
         for it in items:
             if it["condition"] != key or not it.get("visible", True):
                 continue
-            t = it["target"].lower()
-            per_item[key].append([[any(t in [w.strip().lower() for w in st["reads"][li]["words"][:k]] for st in u)
+            ts = set(target_words(it["target"]))
+            per_item[key].append([[any(ts & {w.strip().lower() for w in st["reads"][li]["words"][:k]} for st in u)
                                    for li in range(len(layers))] for u in _units(it["steps"])])
     head = "| Condition | items | " + " | ".join(f"L{l}" for l in layers) + " |"
     rule = "|---|---|" + "---|" * len(layers)
@@ -228,8 +231,9 @@ def _sustain(meta: dict, items: list[dict]) -> list[str]:
     out = [f"## Sustain: share of beads with the target in the top-{k} (mean over items)", "",
            "A bead is one written character, however many tokens it takes. High item hit rates with low",
            "sustain mean the word shows on a few beads only."]
-    if not any("text" in st for it in items for st in it["steps"]):
-        out += ["This run has no decoded text, so each token counts as a bead here."]
+    steps = [st for it in items for st in it["steps"]]
+    if any("\ufffd" in st["tok"] for st in steps) and not any("text" in st for st in steps):
+        out += ["This run has characters split across tokens but no decoded text, so each token counts as a bead here."]
     out += ["", head, rule, *table(False), "",
            "### Leaving out the first bead (where the instruction is closest)", "", head, rule, *table(True), "",
            f"### By bead position, L{layers[deep]}", "",
@@ -250,11 +254,64 @@ def _sustain(meta: dict, items: list[dict]) -> list[str]:
     return out
 
 
+def _repeats(output: str, unit: str) -> int | None:
+    """How many whole copies of unit the output is (whitespace ignored), or None if it isn't."""
+    out = "".join(output.split())
+    if not unit or not out or len(out) % len(unit) or out != unit * (len(out) // len(unit)):
+        return None
+    return len(out) // len(unit)
+
+
+def _recitation(meta: dict, items: list[dict]) -> list[str]:
+    """Items with an expected pattern (spec `expect`, one bead per word of the target phrase):
+    did the model write it, and does the lens follow the phrase bead by bead? On bead i the
+    expected word is word i mod n. "On phase" is that word in the top-10 at bead i; "off phase"
+    is the share of the phrase's other words (each one's rate, averaged) at the same beads, the
+    rate to beat. Only items with the right pattern count for the phase tables."""
+    layers = meta["layers"]
+    k = 10
+    labels = {key: c["label"] for key, c in (meta.get("results") or {}).get("conditions", {}).items()}
+    out = ["## Recitation: did the model write the pattern, and does the lens follow the phrase?", ""]
+    rows = []
+    for key, label in labels.items():
+        its = [it for it in items if it["condition"] == key and it.get("expect")]
+        ok = [it for it in its if _repeats(it["output"], it["expect"])]
+        asked = [it for it in ok if "rounds" in it["vars"] and _repeats(it["output"], it["expect"]) == it["vars"]["rounds"]]
+        rows.append(f"| {label} | {len(its)} | {len(ok)} | {len(asked) if any('rounds' in it['vars'] for it in its) else 'n/a'} |")
+    out += ["| Condition | items | pattern right | right number of rounds |", "|---|---|---|---|", *rows, ""]
+    phrases = sorted({it["target"] for it in items if it.get("expect")})
+    head = "| Condition | " + " | ".join(f"L{l}" for l in layers) + " |"
+    rule = "|---|" + "---|" * len(layers)
+    for phrase in phrases:
+        words = [w.lower() for w in phrase.split()]
+        n = len(words)
+        out += [f"### {phrase}: on phase / off phase, top-{k}", "", head, rule]
+        for key, label in labels.items():
+            its = [it for it in items if it["condition"] == key and it["target"] == phrase
+                   and _repeats(it["output"], it.get("expect", ""))]
+            on = [[0, 0] for _ in layers]
+            off = [[0, 0] for _ in layers]
+            for it in its:
+                for b, unit in enumerate(_units(it["steps"])):
+                    want = words[b % n]
+                    others = set(words) - {want}
+                    for li in range(len(layers)):
+                        seen = {w.strip().lower() for st in unit for w in st["reads"][li]["words"][:k]}
+                        on[li][0] += want in seen
+                        on[li][1] += 1
+                        off[li][0] += len(others & seen)
+                        off[li][1] += len(others)
+            cells = [f"{a / b * 100:.1f}% / {c / d * 100:.1f}%" if b and d else "n/a" for (a, b), (c, d) in zip(on, off)]
+            out.append(f"| {label} ({len(its)}) | " + " | ".join(cells) + " |")
+        out.append("")
+    return out
+
+
 def _example_block(meta: dict, it: dict, track: set[str]) -> list[str]:
     """One item: its prompt, its output, and the top-5 readout at each layer at the token where
     the target (or a tracked word) ranked best."""
     layers = meta["layers"]
-    targets = {x.strip().lower() for x in it["target"].split(",")}
+    targets = set(target_words(it["target"]))
     prompt = " / ".join(m["content"] for m in it["messages"]).replace("\n", " ")
     out = [f"**{it['condition']} · {it['target']}** (item {it['i']})", "",
            f"- Prompt: {prompt[:300]}", f"- Output: {it['output'][:200]}", ""]

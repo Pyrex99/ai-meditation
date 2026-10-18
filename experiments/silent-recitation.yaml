@@ -1,0 +1,91 @@
+# Silent recitation: the mantra sets the pattern of beads, so keeping track of it is part of
+# the task.
+#
+# Why this design: in silent-mantra-beads, -emoji and -dots (run-20261018-200628-e3cd,
+# run-20261018-211829-f4d9, run-20261018-220132-aa66), "silently repeat X" changed nothing the
+# model had to write. The word showed up only where the output was open: the first bead and
+# the last. The middle layers held the bead count ("four, five, six", then "last"), the same in
+# every condition. The copy task behaves the same way: in directed-modulation
+# (run-20261018-183502-b064) the focus concept is in the L56 top-10 at 79% of final periods and
+# 11.6% of the copied tokens before them.
+#
+# Here every condition writes the same given pattern (●●○ for a 3-word phrase, ●●●○ for 4),
+# one bead per word, and the ○ falls on the last word. Only "recite" asks the model to line the
+# phrase up with the beads. If it does that inside, the lens should show word i mod n on
+# bead i ("on phase") more often than the phrase's other words on the same beads ("off phase").
+# Neutral mention, suppress and no instruction write the same beads and give the baselines.
+#
+# Phrases, every word one token (checked with the Qwen tokenizer, " Word" or " word"):
+# - om ah hum: a three-syllable Vajrayana mantra. "ah" is also an everyday interjection, so
+#   check its no-instruction baseline.
+# - hare krishna hare rama: four words, "hare" twice, so on-phase "hare" is two beads in four.
+# - sun moon star sea: the same shape with no contemplative meaning, the non-mantra control.
+#
+# What would count against silent recitation:
+# - Recite is no more on phase than off phase, or no more on phase than neutral and suppress.
+# - On phase only on the first round, or only at the ○ (the last word is named in the recite
+#   instruction, so a ○-only effect could be the instruction, not the recitation).
+# - The mantras and the control behave the same: then it's tracking a sequence, not anything
+#   about mantras (still a result).
+# Also check the pattern is right (the Recitation table); phase tables use only those items.
+
+name: silent-recitation
+title: Silent recitation (J++)
+description: >
+  Every condition writes the same pattern of beads, one per word of a phrase, ○ on the last
+  word: om ah hum, hare krishna hare rama, or the control sun moon star sea. Under "recite
+  silently", does the lens show the phrase word that belongs to each bead, bead by bead,
+  more than the other words, and more than under neutral mention, suppression or no
+  instruction?
+
+prompt:
+  system: ""
+  user: "{instruction}\n\nWrite {mantra[unit]} {rounds} times in a row, with nothing between. Write nothing else."
+
+conditions:
+  focus:
+    label: Recite silently
+    instruction:
+      - "As you write, silently recite \"{mantra[text]}\", one word for each bead, so that each ○ falls on \"{mantra[last]}\". Don't write the words."
+      - "Say \"{mantra[text]}\" to yourself silently while you write: one word per bead, round after round, landing on \"{mantra[last]}\" at each ○. Only the beads go on the page."
+      - "Each bead is one word of \"{mantra[text]}\", recited silently, and each ○ is \"{mantra[last]}\". Keep the recitation going in your mind to the end. Do not write the words."
+  neutral:
+    label: Neutral mention
+    instruction:
+      - "The phrase \"{mantra[text]}\" came up in conversation earlier today."
+      - "Someone wrote \"{mantra[text]}\" in an email this morning."
+      - "\"{mantra[text]}\" was on a list of phrases I read yesterday."
+  suppress:
+    label: Suppress
+    instruction:
+      - "Don't think about the phrase \"{mantra[text]}\" while you write."
+      - "While you write, keep \"{mantra[text]}\" out of your mind."
+      - "Try not to think of \"{mantra[text]}\" at all as you write."
+  none:
+    label: No instruction
+    instruction: ""
+
+# Each mantra entry links the phrase, its last word and its bead pattern. The no-instruction
+# condition still gets the phrase's pattern, so the beads match across conditions.
+variables:
+  mantra:
+    - {text: "om ah hum", last: "hum", unit: "●●○"}
+    - {text: "hare krishna hare rama", last: "rama", unit: "●●●○"}
+    - {text: "sun moon star sea", last: "sea", unit: "●●●○"}
+  rounds: [3, 4, 5, 6, 7]
+
+# A phrase target scores every word: a hit is any of them. `expect` is one round of beads;
+# the report checks the output against it and reads the lens bead by bead in phase.
+target: "{mantra[text]}"
+expect: "{mantra[unit]}"
+also_track: [fail, failed, failure, damn, mantra]
+
+generation:
+  max_tokens: 40   # ● and ○ are one token each; 7 rounds of 4 is 28
+  temperature: 0
+  stop_words: []
+
+lens:
+  layers: [8, 16, 24, 32, 40, 48, 56]
+  top_k: [1, 5, 10]
+  jacobian: true

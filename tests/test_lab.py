@@ -165,3 +165,25 @@ def test_instruction_wordings_and_sustain():
     steps = [{"reads": [], "tok": "�", "text": ""}, {"reads": [1], "tok": "�", "text": ""},
              {"reads": [1], "tok": "�", "text": "📿"}, {"reads": [1], "tok": " a"}]
     assert [len(u) for u in _units(steps)] == [2, 1]
+
+
+def test_recitation_spec_runs_and_scores_phase():
+    from lab import experiment as E
+    from lab.report import _recitation, _repeats, run_report
+
+    raw, spec = E.load("silent-recitation")
+    assert E.validate(spec) == [] and E.n_generations(spec) == 15 * (3 + 3 + 3 + 1)
+    assert E.target_words("hare krishna hare rama") == ["hare", "krishna", "rama"]
+    assert _repeats("●●○●●○", "●●○") == 2 and _repeats("●●○●", "●●○") is None
+    meta = asyncio.run(E.run_experiment(SimEngine(), "silent-recitation", raw, spec, run_id="run-test-rec",
+                                        limit=2, seed=1, cancel=asyncio.Event()))
+    assert meta["status"] == "complete"
+    items = store.load_run_items("run-test-rec")
+    assert all(it["expect"] in ("●●○", "●●●○") for it in items)
+    assert "## Recitation" in run_report(meta, items)
+    # On phase: word i mod n read at bead i.
+    read = lambda w: [{"layer": l, "words": [w], "probs": [1.0]} for l in meta["layers"]]  # noqa: E731
+    fake = {"condition": "focus", "target": "om ah hum", "expect": "●●○", "output": "●●○",
+            "vars": {}, "steps": [{"tok": c, "reads": read(w)} for c, w in zip("●●○", ["om", "ah", "hum"])]}
+    table = "\n".join(_recitation(meta, [fake]))
+    assert "| Recite silently (1) | 100.0% / 0.0%" in table
