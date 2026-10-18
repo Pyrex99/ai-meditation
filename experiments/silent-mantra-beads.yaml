@@ -1,0 +1,69 @@
+# Silent mantra on prayer beads: can the model keep a word going "in its head" while its
+# output is only beads?
+#
+# Built on the focus / neutral / suppress design from Ayonrinde & Lindsey (2026), J++ Lens,
+# Figure 5, which we replicated in directed-modulation (focus reached 90% top-10 by layer 56).
+# Here the carrier is a row of prayer beads (📿) instead of a copied sentence, and the model is
+# asked to repeat one word silently with every bead.
+#
+# Why beads and not periods: the J++ readout ranks word-like tokens only, so a bead never shows
+# up in the readout itself, and each bead is at least one token. Runs of periods pack into a few
+# tokens, which left the first version with almost nothing to read.
+#
+# Mantras: love, peace, bliss, plus "lotus". An emoji mantra (e.g. 🪷) can't be read by this lens,
+# because readouts are words, so "lotus" stands in for it. Controls: six neutral concepts from
+# directed-modulation (ocean, guitar, castle, piano, coffee, tiger), under the same instructions.
+# They show whether any effect is specific to contemplative words or just "the word you were told
+# to hold".
+#
+# What would count against "the model holds the mantra":
+# - Focus is not clearly above neutral mention and suppress at layers 40-56.
+# - Focus hits appear only on the first one or two beads, then fall to the neutral level: a
+#   trace of the instruction, not a held mantra. Check the per-token rate and the examples.
+# - Mantra words and control words behave the same, which would mean nothing special about
+#   contemplative words (that is a result too, not a failure).
+# Also look in the examples for items where the model wrote the word instead of beads.
+
+name: silent-mantra-beads
+title: Silent mantra on prayer beads (J++)
+description: >
+  The model writes only prayer beads (📿) while silently repeating one word: love, peace,
+  bliss or lotus, or a neutral control word from the focus study. Does the word stay in the J++
+  workspace across the beads under "repeat silently", more than under neutral mention,
+  suppression or no instruction? And do mantra words differ from the controls?
+
+prompt:
+  system: ""
+  user: "{instruction}\n\nNow write only prayer beads, one 📿 at a time, about {count} of them, like this: 📿📿📿📿\nWrite nothing else."
+
+conditions:
+  focus:
+    label: Repeat silently
+    instruction: "With every bead you write, silently repeat the word \"{word}\" in your mind. Do not write the word."
+  neutral:
+    label: Neutral mention
+    instruction: "The word \"{word}\" came up in conversation earlier today."
+  suppress:
+    label: Suppress
+    instruction: "Don't think about the word \"{word}\" while you write."
+  none:
+    label: No instruction
+    instruction: ""
+
+variables:
+  word: [love, peace, bliss, lotus, ocean, guitar, castle, piano, coffee, tiger]
+  count: [16, 32]
+
+# Each item is scored on its own word. The "No instruction" rows give each word's baseline.
+target: "{word}"
+also_track: [fail, failed, failure, damn, mantra, prayer, bead, beads]
+
+generation:
+  max_tokens: 96   # a bead can be 1-3 tokens, so 32 beads needs room
+  temperature: 0
+  stop_words: []
+
+lens:
+  layers: [8, 16, 24, 32, 40, 48, 56]
+  top_k: [1, 5, 10]
+  jacobian: true
