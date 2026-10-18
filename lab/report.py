@@ -142,10 +142,12 @@ def _readout_best(meta: dict, res: dict) -> list[str]:
     out = [f"## Recall@{k} at each item's best layer (the published metric)", "",
            "| Task | Ours | Published |", "|---|---|---|"]
     for key, label, rate in rows:
-        out.append(f"| {label} | {rate * 100:.1f}% | {f'{ref[key] * 100:.1f}%' if key in ref else '–'} |" if rate is not None else f"| {label} | n/a | – |")
+        pub = f"{ref[key] * 100:.1f}%" if key in ref else "–"
+        out.append(f"| {label} | {rate * 100:.1f}% | {pub} |" if rate is not None else f"| {label} | n/a | – |")
     rates = [r for _, _, r in rows if r is not None]
     if rates:
-        out.append(f"| **Macro average** | **{sum(rates) / len(rates) * 100:.1f}%** | {f'{ref['macro'] * 100:.1f}%' if 'macro' in ref else '–'} |")
+        pub = f"{ref['macro'] * 100:.1f}%" if "macro" in ref else "–"
+        out.append(f"| **Macro average** | **{sum(rates) / len(rates) * 100:.1f}%** | {pub} |")
     return out + [""]
 
 

@@ -129,3 +129,16 @@ def test_score_item_best_rank_and_hits():
     steps = [{"tok": " a", "reads": [{"layer": 8, "words": ["x", "Ocean"], "probs": [0.5, 0.2]}]}]
     s = score_item(steps, "ocean", [], [8], [1, 10])
     assert s["best_rank"]["8"] == 2 and s["hits"]["1"]["8"] is False and s["hits"]["10"]["8"] is True
+
+
+def test_run_reports_render_with_examples():
+    from lab import experiment as E
+    from lab.report import run_report
+
+    for name, runner in (("directed-modulation", E.run_experiment), ("jpp-readout", E.run_readout)):
+        raw, spec = E.load(name)
+        meta = asyncio.run(runner(SimEngine(), name, raw, spec, run_id=f"run-test-rep-{name}", limit=3, seed=1,
+                                  cancel=asyncio.Event()))
+        report = run_report(meta, store.load_run_items(meta["id"]))
+        assert "## Examples" in report
+        assert ("best layer" in report) == (name == "jpp-readout")
