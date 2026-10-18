@@ -36,8 +36,7 @@ new claim rests on it.
 
 ## Run it locally (no GPU)
 
-    pip install -r requirements.txt
-    uvicorn lab.server:app --port 8080
+    ./run.sh
 
 Open http://localhost:8080. The simulated engine is a toy: for experiments it produces curves
 shaped like the published ones, so the pipeline and charts can be checked. Everything it makes
@@ -48,7 +47,7 @@ is labelled simulated and says nothing about any model.
 The app runs on your computer. The GPU is rented from RunPod only while you experiment.
 
 1. Put `RUNPOD_API_KEY` in `keys.env` (add credit to your RunPod account first).
-2. `uvicorn lab.server:app --port 8080`, open http://localhost:8080, go to **Lab → GPU**.
+2. `./run.sh`, open http://localhost:8080, go to **Lab → GPU**.
 3. **Once:** pick a data center that has A100 80GB GPUs and press **Set up storage**. This
    creates a 150 GB network volume (about $10/month) that keeps the model between sessions.
 4. **Each session:** press **Start GPU**. The app creates a pod on that storage running
