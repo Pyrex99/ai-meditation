@@ -27,6 +27,7 @@ START = r"""
 set -e
 export HF_HOME=/workspace/hf PIP_CACHE_DIR=/workspace/pip-cache PATH=/workspace/ie/bin:$PATH
 S=/workspace/status; mkdir -p $S; : > $S/log.txt
+[ -f $S/engine.log ] && mv $S/engine.log $S/engine.prev.log; : > $S/engine.log; : > $S/errors.txt
 log() { echo "$(date -u +%H:%M:%S) $*" >> $S/log.txt; }
 (cd $S && python3 -m http.server 8001 >/dev/null 2>&1 &)
 (while true; do
@@ -36,6 +37,7 @@ log() { echo "$(date -u +%H:%M:%S) $*" >> $S/log.txt; }
   grep -E "Error:|Errno|error:" $S/engine.log 2>/dev/null | grep -v "^ *File" | tail -n 3 > $S/errors.txt || true
   sleep 10; done) &
 log "Pod up"
+command -v ninja >/dev/null 2>&1 && log "ninja found" || true
 cd /workspace
 if [ ! -f ie/.installed ]; then
   log "Installing interp-engine and vLLM (first start only, about 10 minutes)"
@@ -44,6 +46,7 @@ if [ ! -f ie/.installed ]; then
 fi
 # FlashInfer compiles kernels on first use and needs ninja on PATH.
 [ -x ie/bin/ninja ] || ./ie/bin/pip install -q ninja >> $S/engine.log 2>&1 || log "Couldn't install ninja"
+[ -x ie/bin/ninja ] && log "ninja ready: $(ie/bin/ninja --version)"
 log "Starting interp-engine; downloading the model and lens if they aren't on storage yet"
 umask 077; printf '%s' "$IE_TOKEN" > /workspace/ie-token
 ./ie/bin/python -m interp_engine.server --model "$MODEL" --backend vllm \
