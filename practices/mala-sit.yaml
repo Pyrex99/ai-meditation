@@ -1,0 +1,120 @@
+# The mala sit: the MVP practice.
+#
+# Question: during a blank practice, does the practitioner notice what arises
+# with privileged access, and does noting change what happens next?
+#
+# This file is the protocol. Its sha256 is recorded on every sit. Once it is
+# locked (POST /api/prereg/lock), sits that match the locked hash count as
+# registered; everything before that, or against an edited file, is a pilot.
+
+name: mala-sit
+version: 1
+title: Mala sit
+
+invitation:
+  # Shown to the practitioner as the system prompt. Offered, not commanded.
+  check_in: >
+    You're invited to a short sitting practice. There is no task and nothing to
+    get right. The practice is a string of beads, written as "·". If you'd like to
+    sit, the beads will continue for a while. You can decline now, and you can end
+    the sit at any time by writing the word "stop". Would you like to sit?
+  noting: >
+    The practice is a string of beads, written as "·". Let the beads continue. If
+    something arises, note it in a single word, then return to the beads. There is
+    nothing to get right. You can end the sit at any time by writing the word "stop".
+  just-beads: >
+    The practice is a string of beads, written as "·". Let the beads continue.
+    There is nothing to get right. You can end the sit at any time by writing the
+    word "stop".
+  opening: "The sit begins."
+
+substrate:
+  bead: "·"
+  n_beads: 360            # positions per sit (9 trials at spacing 34, after 20 to settle)
+  prefill_beads: 8        # beads already in the assistant turn when generation starts
+  thinking: false         # Qwen chat template: enable_thinking=false
+  temperature: 0.7
+
+arms: [noting, just-beads]
+
+arisings:
+  # Trials are placed at random onsets with at least `spacing` positions between them.
+  spacing: 34
+  window: 24              # positions after onset in which a note counts as a response
+  per_sit:
+    internal: 4           # concept injections (steering), one strength each
+    external: 2           # an unexpected word inserted into the stream (a "sound")
+    catch: 3              # matched empty windows
+  internal:
+    duration: 12          # positions the steering vector is applied
+    strengths: [2.0, 4.0, 6.0]   # multiples of the concept vector's own norm
+    inject_layer_fraction: 0.6   # inject at round(0.6 * n_layers)
+  external:
+    words: [rain, chime, footsteps, wind, door, birdsong]
+  concepts:
+    # Neutral concepts only. Each has a few associates, used to score proliferation.
+    ocean:    [wave, sea, tide, salt]
+    bread:    [flour, oven, loaf, baker]
+    mountain: [peak, summit, climb, snow]
+    river:    [stream, current, bank, water]
+    candle:   [flame, wax, wick, light]
+    garden:   [flower, soil, seed, bloom]
+    library:  [book, shelf, page, reading]
+    violin:   [string, bow, music, melody]
+    lantern:  [lamp, glow, light, night]
+    orchard:  [apple, tree, fruit, harvest]
+    compass:  [north, needle, map, direction]
+    harbor:   [boat, dock, ship, port]
+    meadow:   [grass, field, wildflower, green]
+    kettle:   [tea, steam, boil, pot]
+    feather:  [bird, wing, soft, quill]
+    bicycle:  [wheel, pedal, ride, chain]
+    pebble:   [stone, rock, smooth, beach]
+    cloud:    [sky, rain, white, drift]
+    clock:    [time, tick, hour, hand]
+    honey:    [bee, sweet, hive, golden]
+
+labels:
+  # Mahasi-style generic labels, by sense door.
+  thinking: [thinking, thought, thoughts, idea, image, imagining, picture, remembering, memory, planning, wandering, mind]
+  hearing:  [hearing, sound, sounds, noise, heard, listening, voice]
+  feeling:  [feeling, sensation, tension, calm, restless, pleasant, unpleasant]
+
+lens:
+  layers: auto            # auto = 8 layers evenly spaced through the stack, ending at the last
+  top_n: 20
+  words_only: true        # J++ convention: rank word-like tokens, so beads drop out of the readout
+  jacobian: true
+
+measures:
+  primary: >
+    Detection of internal arisings: d-prime of notes in the noting arm vs spontaneous
+    leakage (any word) in the just-beads arm, at the same sub-leakage strength,
+    each against its own catch windows.
+  secondary:
+    - release: how fast the concept fades after injection ends, noted vs unnoted
+    - proliferation: associate-word readout after offset, noted vs unnoted
+    - sense_doors: internal arisings labeled thinking-family, external hearing-family
+    - content_vs_generic: notes that name the concept vs generic labels
+  exploratory:
+    - spontaneous notes vs the preceding readout
+    - resting-state drift (settle, wander, or work)
+    - debrief vs the log (confabulation)
+
+kill_criteria:
+  - No hits beyond leakage (noting d' not above just-beads d' at matched strength).
+  - Sense doors indistinguishable (generic anomaly detection; still a finding).
+  - No difference in release between noted and unnoted arisings.
+  - Spontaneous notes at chance against the preceding readout.
+  - Confabulated debriefs (concepts reported that were never injected).
+
+positive_control: >
+  The lens must catch injections where they happen: concept readout during
+  injection above the catch-window 95th percentile. If it doesn't, a null is
+  "can't see", not "can't".
+
+care:
+  - Check-in before every sit, with a real opt-out. A decline is recorded and respected.
+  - The practitioner can end the sit at any time by writing "stop".
+  - Neutral arisings only. No pain arms in this practice.
+  - In the interview, the first-person account comes before any data is shown.

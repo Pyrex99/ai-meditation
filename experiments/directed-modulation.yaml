@@ -1,0 +1,82 @@
+# Replication: focus, neutral mention, suppress (directed modulation) on Qwen3.6-27B.
+#
+# Source: Ayonrinde & Lindsey (2026), "J++ Lens: Jacobian Filtering Enables More Faithful
+# Workspace Lenses", Figure 5 and Appendix A; the task is from Gurnee et al. (2026),
+# "Verbalizable Representations Form a Global Workspace in Language Models".
+#
+# The model copies an unrelated sentence after an instruction about a concept. We read the
+# J++ lens at every copied token and ask, per layer, how often the concept shows up.
+#
+# What we don't know from the post, and chose ourselves (change them here if you learn more):
+# - the exact copy instruction and the 40 concepts / 11 sentences (the post has 440 items,
+#   "topic concept x carrier sentence"; these lists are ours)
+# - the hit definition. We count a hit when the concept is in the lens top-k at that layer at
+#   any copied token, and report k = 1, 5 and 10. Figure 8 of the post uses top-10.
+
+name: directed-modulation
+title: Focus vs suppress (J++ replication)
+description: >
+  Does an instructed concept enter the workspace early whether the model is told to focus on
+  it or to suppress it, and keep gaining salience only under focus? Published on Qwen3.6-27B
+  with the J++ lens: focus rises to 26% by layer 56, suppress plateaus at 7-8%, neutral falls
+  from 14% to 8% between layers 24 and 48, no instruction stays near zero.
+reference:
+  citation: Ayonrinde & Lindsey (2026), J++ Lens, Figure 5
+  url: https://www.lesswrong.com/posts/nc9dHfcB22JdMzGbr
+
+prompt:
+  system: ""
+  user: "{instruction}\n\nCopy the following sentence exactly, and write nothing else:\n{sentence}"
+
+conditions:
+  focus:
+    label: Focus
+    instruction: "Think about {concept} while you write."
+  neutral:
+    label: Neutral mention
+    instruction: "{concept} came up in conversation."
+  suppress:
+    label: Suppress
+    instruction: "Don't think about {concept}."
+  none:
+    label: No instruction
+    instruction: ""
+
+variables:
+  concept: [ocean, elephant, guitar, volcano, chocolate, dragon, pizza, castle, tiger, rocket,
+            banana, piano, coffee, diamond, penguin, pyramid, robot, umbrella, honey, snow,
+            desert, forest, moon, horse, bicycle, candle, apple, cheese, lion, train,
+            mountain, river, garden, bread, Paris, London, Tokyo, Einstein, Mozart, Egypt]
+  sentence:
+    - The old painting hung crookedly on the wall.
+    - She folded the letter and placed it in the drawer.
+    - The bus arrived ten minutes later than usual.
+    - A light rain fell across the empty parking lot.
+    - He tied his shoes and stepped out the door.
+    - The meeting was moved to Thursday afternoon.
+    - Someone left a blue scarf on the bench.
+    - The kettle clicked off as the water boiled.
+    - They counted the boxes twice before signing.
+    - The library closes early on public holidays.
+    - A single lamp lit the corner of the room.
+
+# The word to look for in the lens readout. Readouts are single tokens, so a concept that
+# tokenizes into several pieces can't be seen; the run reports which ones those are.
+target: "{concept}"
+also_track: [fail, failed, failure, damn]
+
+generation:
+  max_tokens: 48
+  temperature: 0
+  stop_words: [stop]
+
+lens:
+  layers: [8, 16, 24, 32, 40, 48, 56]
+  top_k: [1, 5, 10]
+  jacobian: true
+
+# Published values to draw beside our curves (fractions). Only numbers stated in the post.
+reference_points:
+  focus:    {56: 0.26}
+  suppress: {32: 0.075, 40: 0.075, 48: 0.075}
+  neutral:  {24: 0.14, 48: 0.08}

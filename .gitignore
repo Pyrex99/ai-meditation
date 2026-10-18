@@ -1,0 +1,7 @@
+data/
+out/
+prereg/*.lock.json.bak
+__pycache__/
+.pytest_cache/
+keys.env
+.env

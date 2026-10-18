@@ -1,0 +1,41 @@
+# Exact replication: J++ readout evals on Qwen3.6-27B.
+#
+# Source: Ayonrinde & Lindsey (2026), "J++ Lens", Figures 1-2 and Table 1. The items are the
+# published ones (experiments/data/jpp, from github.com/safety-research/jpp_lens, Apache-2.0).
+# Each prompt is read at one position as raw text (no chat template), at seven layers, with
+# Readout Filtering (word-like tokens only). Score: recall@k = share of an item's
+# intermediates whose best rank over the seven layers is within k, averaged over items,
+# then macro-averaged over the five tasks.
+#
+# Published on Qwen3.6-27B: J++ 55.2% recall@10 (J-Lens 35.7%, R-Lens 37.7%); association
+# 37%; poetry at most 5%. The post scores J++ on items its expert weights didn't see, which
+# we can't reproduce exactly, so expect to land near rather than on 55.2%.
+# Counts against the stack: recall@10 far below the J-Lens's 35.7%.
+
+name: jpp-readout
+kind: readout
+title: Readout recall (exact J++ replication)
+description: >
+  The published J++ readout evals (multihop, multilingual, typo, association, poetry): can the
+  lens read the hidden intermediate word at one position? Published on Qwen3.6-27B: 55.2%
+  recall@10 macro-averaged, association 37%, poetry at most 5%.
+reference:
+  citation: Ayonrinde & Lindsey (2026), J++ Lens, Figure 2 and Table 1
+  url: https://www.lesswrong.com/posts/nc9dHfcB22JdMzGbr
+
+tasks:
+  multihop:     {label: Multihop, file: data/jpp/lens-eval-multihop.json, position: last}
+  multilingual: {label: Multilingual, file: data/jpp/lens-eval-multilingual.json, position: last}
+  typo:         {label: Typo, file: data/jpp/lens-eval-typo.json, position: last}
+  association:  {label: Association, file: data/jpp/lens-eval-association.json, position: last}
+  poetry:       {label: Poetry, file: data/jpp/lens-eval-poetry.json, position: last_newline}
+
+lens:
+  layers: [8, 16, 24, 32, 40, 48, 56]
+  top_k: [1, 10]
+  jacobian: true
+
+reference_any:
+  macro: 0.552
+  association: 0.37
+  poetry: 0.05
