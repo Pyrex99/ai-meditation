@@ -20,7 +20,7 @@ from pathlib import Path
 
 import yaml
 
-from . import store
+from . import detok, store
 from .engine import Engine, Steer
 from .scoring import wilson
 
@@ -411,11 +411,17 @@ async def run_experiment(engine: Engine, name: str, raw: str, spec: dict, *, run
                 if tok.startswith("<|") and tok.endswith("|>"):
                     break
                 text += s.token_str
-                steps.append({"tok": s.token_str, "reads": [
+                steps.append({"tok": s.token_str, "id": s.token_id, "reads": [
                     {"layer": r.layer, "words": r.words[:top_n], "probs": [round(p, 5) for p in r.probs[:top_n]]}
                     for r in s.reads]})
                 if _norm(tok).strip(".!,") in stops:
                     break
+            if any(detok.BAD in st["tok"] for st in steps):
+                shown = await asyncio.to_thread(detok.pieces, info.model, [st["id"] for st in steps])
+                if shown:
+                    for st, piece in zip(steps, shown):
+                        st["text"] = piece
+                    text = "".join(shown)
             target = spec["target"].format(**vals)
             item = {
                 "i": idx, "condition": key, "vars": vals, "messages": msgs, "output": text.strip(),

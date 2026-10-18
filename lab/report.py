@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from . import detok
+
 
 def _rate(d: dict) -> str:
     return f"{d['k']}/{d['n']}" if d["n"] else "n/a"
@@ -200,7 +202,7 @@ def _example_block(meta: dict, it: dict, track: set[str]) -> list[str]:
         ws = [w.strip().lower() for w in best["reads"][li]["words"]]
         extra = [f"{_w(w, targets, track)} (#{i + 1})" for i, w in enumerate(best["reads"][li]["words"][:10])
                  if i >= 5 and (ws[i] in targets or ws[i] in track)]
-        out.append(f"| L{layer} | `{best['tok'].strip() or '␣'}` | {shown}{'; ' + ', '.join(extra) if extra else ''} |")
+        out.append(f"| L{layer} | `{detok.step_label(best)}` | {shown}{'; ' + ', '.join(extra) if extra else ''} |")
     return out + [""]
 
 

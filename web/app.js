@@ -1025,6 +1025,10 @@
     host.querySelectorAll("[data-item]").forEach((b) => b.addEventListener("click", () => itemDetail($("#item-detail", host), meta, Number(b.dataset.item), k)));
   }
 
+  // A step's text: interp-engine sends byte pieces of one character (📿 is three tokens) as "�";
+  // runs since token ids were kept carry the decoded text, "" for a partial piece.
+  const stepLabel = (s) => (s.text !== undefined ? s.text.trim() || (s.text ? "␣" : "·") : s.tok.trim() || "␣");
+
   async function itemDetail(host, meta, idx, k) {
     host.innerHTML = `<p class="small muted">Loading…</p>`;
     const it = await api(`/api/runs/${encodeURIComponent(meta.id)}/items/${idx}`);
@@ -1043,9 +1047,9 @@
         <div class="row between"><b class="mono">${esc(it.target)} · ${esc(meta.results.conditions[it.condition].label)}</b><button class="btn ghost" id="close-item" type="button">Close</button></div>
         <p class="small"><span class="muted">Prompt:</span> ${esc(it.messages.map((m) => m.content).join(" / "))}</p>
         <p class="small"><span class="muted">Output:</span> ${esc(it.output)}</p>
-        <div class="grid-scroll"><table class="cells"><thead><tr><th></th>${it.steps.map((s) => `<th>${esc(s.tok.trim() || "␣")}</th>`).join("")}</tr></thead>
+        <div class="grid-scroll"><table class="cells"><thead><tr><th></th>${it.steps.map((s) => `<th>${esc(stepLabel(s))}</th>`).join("")}</tr></thead>
           <tbody>${meta.layers.map((l, li) => `<tr><th>L${l}</th>${it.steps.map((s) => (s.reads ? cell(s.reads[li]) : "<td></td>")).join("")}</tr>`).join("")}</tbody></table></div>
-        <p class="small muted">Columns are the tokens the model wrote; rows are layers. Each cell shows the lens's top word, or the target when it is in the top-${k} (filled at #1, outlined otherwise). Amber cells show a failure word (or other tracked word) in the top-10, with its rank. Tap or hover a cell for its top 10.</p>
+        <p class="small muted">Columns are the tokens the model wrote (· is part of a character split across tokens, shown on its last piece); rows are layers. Each cell shows the lens's top word, or the target when it is in the top-${k} (filled at #1, outlined otherwise). Amber cells show a failure word (or other tracked word) in the top-10, with its rank. Tap or hover a cell for its top 10.</p>
         <p class="small" id="cell-top"></p>
       </div>`;
     $("#close-item", host).addEventListener("click", () => { host.innerHTML = ""; });
