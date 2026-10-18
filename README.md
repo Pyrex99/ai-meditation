@@ -43,15 +43,21 @@ Open http://localhost:8080. The simulated engine is a toy: for experiments it pr
 shaped like the published ones, so the pipeline and charts can be checked. Everything it makes
 is labelled simulated and says nothing about any model.
 
-## Run it for real (RunPod)
+## Run it for real (GPU on demand)
 
-1. Create a pod with one A100 80GB and a volume at `/workspace`. Expose HTTP port 8080.
-2. Clone this repo onto the pod, copy `keys.env.example` to `keys.env` and fill it in, then
-   run `bash runpod/setup.sh`. It
-   installs interp-engine, serves Qwen3.6-27B on localhost with the released J++ lens
-   (`hf://koayon/jpp-lenses/qwen3.6-27b/lens.pt`), and starts the app on 8080.
-3. On your phone, open `https://<pod-id>-8080.proxy.runpod.net` and enter the passcode.
-4. Experiments → Readout recall → Full run. Then Focus vs suppress.
+The app runs on your computer. The GPU is rented from RunPod only while you experiment.
+
+1. Put `RUNPOD_API_KEY` in `keys.env` (add credit to your RunPod account first).
+2. `uvicorn lab.server:app --port 8080`, open http://localhost:8080, go to **Lab → GPU**.
+3. **Once:** pick a data center that has A100 80GB GPUs and press **Set up storage**. This
+   creates a 150 GB network volume (about $10/month) that keeps the model between sessions.
+4. **Each session:** press **Start GPU**. The app creates a pod on that storage running
+   interp-engine with Qwen3.6-27B and the J++ lens, and switches experiments to it when the model
+   is ready. The first start installs and downloads about 60 GB (20-40 minutes); later
+   starts take a few minutes.
+5. Press **Stop GPU** when you're done. That deletes the pod; the storage stays.
+
+`runpod/setup.sh` is the manual alternative: everything on one pod, the app included.
 
 ## Keys, once
 

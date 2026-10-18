@@ -30,16 +30,19 @@ from .sit import SitControl, new_sit_id, run_sit
 
 WEB = Path(__file__).resolve().parent.parent / "web"
 CONFIG = store.DATA / "config.json"
-SECRET_FIELDS = ("anthropic_key", "openrouter_key", "runpod_key", "interp_token")
+SECRET_FIELDS = ("anthropic_key", "openrouter_key", "runpod_key", "interp_token", "hf_token")
 ENV = {
     "anthropic_key": "ANTHROPIC_API_KEY",
     "openrouter_key": "OPENROUTER_API_KEY",
     "runpod_key": "RUNPOD_API_KEY",
     "interp_token": "INTERP_ENGINE_TOKEN",
     "interp_url": "INTERP_ENGINE_URL",
-    "runpod_pod_id": "RUNPOD_POD_ID",
+    "hf_token": "HF_TOKEN",
+    "data_center": "RUNPOD_DATA_CENTER",
+    "network_volume_id": "RUNPOD_VOLUME_ID",
+    "runpod_image": "RUNPOD_IMAGE",
 }
-DEFAULTS = {"engine": "sim", "interp_url": "http://127.0.0.1:8000", "runpod_pod_id": "", "openrouter_model": "qwen/qwen3.6-27b"}
+DEFAULTS = {"engine": "sim", "interp_url": "http://127.0.0.1:8000", "openrouter_model": "qwen/qwen3.6-27b"}
 
 
 # Put keys in one file, once: keys.env in the repo (gitignored) or ~/.config/mala-lab/keys.env.
@@ -130,7 +133,8 @@ async def status() -> dict:
         "engine": cfg["engine"],
         "keys": {f: bool(cfg.get(f)) for f in SECRET_FIELDS},
         "interp_url": cfg.get("interp_url"),
-        "runpod_pod_id": cfg.get("runpod_pod_id"),
+        "gpu": {"pod_id": cfg.get("pod_id"), "data_center": cfg.get("data_center"),
+                "network_volume_id": cfg.get("network_volume_id")},
         "openrouter_model": cfg.get("openrouter_model"),
         "running": list(state.running),
         "runs_going": list(state.runs),
@@ -152,7 +156,6 @@ class ConfigIn(BaseModel):
     openrouter_key: str | None = None
     openrouter_model: str | None = None
     runpod_key: str | None = None
-    runpod_pod_id: str | None = None
 
 
 @app.post("/api/config", dependencies=[api])
@@ -460,22 +463,49 @@ async def ask_ai(body: AskIn) -> dict:
     return {"answer": answer, "model": body.model, "cited": body.sit_ids}
 
 
-class PodIn(BaseModel):
+class GpuIn(BaseModel):
     action: str
+    data_center: str | None = None
 
 
-@app.post("/api/runpod", dependencies=[api])
-async def pod(body: PodIn) -> dict:
+@app.post("/api/gpu", dependencies=[api])
+async def gpu(body: GpuIn) -> dict:
+    """setup (create storage once), start, stop, status."""
     cfg = load_config()
-    if not (cfg.get("runpod_key") and cfg.get("runpod_pod_id")):
-        raise HTTPException(400, "Add a RunPod key and pod id in Lab → GPU first")
-    fn = {"status": runpod.status, "start": runpod.start, "stop": runpod.stop}.get(body.action)
-    if fn is None:
-        raise HTTPException(400, "action is status, start or stop")
+    key = cfg.get("runpod_key")
+    if not key:
+        raise HTTPException(400, "Add RUNPOD_API_KEY to keys.env (or Lab → Keys) first")
     try:
-        return await fn(cfg["runpod_key"], cfg["runpod_pod_id"])
+        if body.action == "setup":
+            if cfg.get("network_volume_id"):
+                raise HTTPException(409, "Storage already exists")
+            if not body.data_center:
+                raise HTTPException(400, "Pick a data center")
+            vol = await runpod.create_volume(key, body.data_center)
+            cfg.update(network_volume_id=vol["id"], data_center=body.data_center)
+        elif body.action == "start":
+            if not cfg.get("network_volume_id"):
+                raise HTTPException(400, "Set up storage first")
+            if cfg.get("pod_id"):
+                raise HTTPException(409, "A GPU is already running")
+            cfg.update(await runpod.start_pod(key, cfg), engine="interp")
+        elif body.action == "stop":
+            if cfg.get("pod_id"):
+                await runpod.stop_pod(key, cfg["pod_id"])
+            cfg.update(pod_id=None, engine="sim")
+        elif body.action != "status":
+            raise HTTPException(400, "action is setup, start, stop or status")
     except RuntimeError as e:
         raise HTTPException(502, str(e))
+    save_config(cfg)
+    out = {"pod_id": cfg.get("pod_id"), "data_center": cfg.get("data_center"), "network_volume_id": cfg.get("network_volume_id")}
+    if cfg.get("pod_id"):
+        try:
+            out["pod"] = await runpod.pod_status(key, cfg["pod_id"])
+        except RuntimeError as e:
+            out["pod_error"] = str(e)
+        out["engine"] = await runpod.engine_health(cfg["interp_url"])
+    return out
 
 
 @app.get("/")

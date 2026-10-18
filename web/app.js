@@ -629,17 +629,23 @@
             ${keyRow("interp_token", "interp-engine token", status.keys.interp_token, "bearer token from --token-file")}
             <div class="row between"><span class="small" id="engine-msg"></span><button class="btn primary" type="submit">Save</button></div>
           </form>
-          <form class="panel stack" id="f-gpu">
+          <div class="panel stack" id="gpu-panel">
             <h3>GPU</h3>
-            <p class="small muted">Qwen3.6-27B with the J++ lens fits one 80GB A100. Start and stop the pod from here when this app runs off the pod.</p>
-            ${keyRow("runpod_key", "RunPod API key", status.keys.runpod_key, "rpa_…")}
-            <label class="field" for="runpod_pod_id">Pod id<input id="runpod_pod_id" value="${esc(status.runpod_pod_id || "")}" placeholder="e.g. 7x2kq9abc123"></label>
-            <div class="row"><button class="btn" type="button" data-pod="status">Check</button><button class="btn" type="button" data-pod="start">Start</button><button class="btn" type="button" data-pod="stop">Stop</button><button class="btn primary" type="submit">Save</button></div>
-            <p class="small" id="pod-msg"></p>
-          </form>
+            <p class="small muted">Qwen3.6-27B with the J++ lens on one 80GB GPU, rented by the hour from RunPod. Storage keeps the model between sessions, so only the first start downloads it.</p>
+            ${status.gpu.network_volume_id ? `
+              <p class="small">Storage <span class="mono">${esc(status.gpu.network_volume_id)}</span> in ${esc(status.gpu.data_center)}</p>
+              <div class="row"><button class="btn primary" type="button" data-gpu="start" ${status.gpu.pod_id ? "hidden" : ""}>Start GPU</button>
+                <button class="btn" type="button" data-gpu="stop" ${status.gpu.pod_id ? "" : "hidden"}>Stop GPU</button>
+                <button class="btn ghost" type="button" data-gpu="status" ${status.gpu.pod_id ? "" : "hidden"}>Check</button></div>` : `
+              <label class="field" for="dc">Data center (once). Pick one where RunPod shows A100 80GB available on its Storage page.
+                <input id="dc" list="dcs" placeholder="e.g. US-KS-2"><datalist id="dcs"><option value="US-KS-2"><option value="US-TX-3"><option value="US-GA-2"><option value="CA-MTL-1"><option value="EU-RO-1"><option value="EU-SE-1"></datalist></label>
+              <div class="row"><button class="btn primary" type="button" data-gpu="setup">Set up storage (150 GB, about $10/month)</button></div>`}
+            <p class="small" id="pod-msg">${status.gpu.pod_id ? "GPU running. Checking…" : status.keys.runpod_key ? "" : "Add RUNPOD_API_KEY to keys.env first."}</p>
+          </div>
           <form class="panel stack" id="f-keys">
             <h3>Keys</h3>
             <p class="small muted">Kept on the lab server, never sent back to this page.</p>
+            ${keyRow("runpod_key", "RunPod API key", status.keys.runpod_key, "rpa_…")}
             ${keyRow("anthropic_key", "Anthropic API key (Ask Claude)", status.keys.anthropic_key, "sk-ant-…")}
             ${keyRow("openrouter_key", "OpenRouter key (Ask Qwen, teachers later)", status.keys.openrouter_key, "sk-or-…")}
             <label class="field" for="openrouter_model">OpenRouter model<input id="openrouter_model" value="${esc(status.openrouter_model || "")}"></label>
@@ -670,13 +676,28 @@
       catch (e) { msgEl.innerHTML = `<span class="err">${esc(e.message)}</span>`; }
     };
     $("#f-engine").addEventListener("submit", (e) => { e.preventDefault(); save(e.target, $("#engine-msg"), ["interp_url", "interp_token"]); });
-    $("#f-keys").addEventListener("submit", (e) => { e.preventDefault(); save(e.target, $("#keys-msg"), ["anthropic_key", "openrouter_key", "openrouter_model"]); });
-    $("#f-gpu").addEventListener("submit", (e) => { e.preventDefault(); save(e.target, $("#pod-msg"), ["runpod_key", "runpod_pod_id"]); });
-    view.querySelectorAll("[data-pod]").forEach((b) => b.addEventListener("click", async () => {
-      const msg = $("#pod-msg"); msg.textContent = "Asking RunPod…";
-      try { const r = await api("/api/runpod", { method: "POST", body: { action: b.dataset.pod } }); msg.innerHTML = `Pod <span class="mono">${esc(r.id)}</span>: <b>${esc(r.status)}</b>${r.gpu ? ` · ${esc(r.gpu)}` : ""}${r.cost_per_hr ? ` · $${esc(r.cost_per_hr)}/hr` : ""}`; }
-      catch (e) { msg.innerHTML = `<span class="err">${esc(e.message)}</span>`; }
-    }));
+    $("#f-keys").addEventListener("submit", (e) => { e.preventDefault(); save(e.target, $("#keys-msg"), ["runpod_key", "anthropic_key", "openrouter_key", "openrouter_model"]); });
+    const gpuMsg = (r) => {
+      if (!r.pod_id) return "No GPU running. You're not being charged for compute.";
+      const p = r.pod || {};
+      const eng = { ready: "Model ready. Experiments now run on the real model.", loading: "Server up, loading the model…", starting: "Pod starting. The first start installs and downloads about 60 GB, so allow 20-40 minutes." }[r.engine] || "";
+      return `Pod <span class="mono">${esc(r.pod_id)}</span> ${esc(p.status || "")}${p.gpu ? ` · ${esc(p.gpu)}` : ""}${p.cost_per_hr ? ` · $${esc(p.cost_per_hr)}/hr` : ""}<br>${eng}${r.pod_error ? `<br><span class="err">${esc(r.pod_error)}</span>` : ""}`;
+    };
+    let gpuTimer = 0;
+    const gpuCall = async (action) => {
+      const msg = $("#pod-msg"); if (!msg) return;
+      clearTimeout(gpuTimer);
+      if (action !== "status") msg.textContent = "Asking RunPod…";
+      try {
+        const r = await api("/api/gpu", { method: "POST", body: { action, data_center: $("#dc")?.value.trim() } });
+        if (action === "setup" || action === "start" || action === "stop") return viewLab(view);
+        msg.innerHTML = gpuMsg(r);
+        if (r.pod_id && r.engine !== "ready") gpuTimer = setTimeout(() => currentTab() === "lab" && gpuCall("status"), 15000);
+        else if (r.engine === "ready") { state.status = await api("/api/status"); setChip(); }
+      } catch (e) { msg.innerHTML = `<span class="err">${esc(e.message)}</span>`; }
+    };
+    view.querySelectorAll("[data-gpu]").forEach((b) => b.addEventListener("click", () => gpuCall(b.dataset.gpu)));
+    if (status.gpu.pod_id) gpuCall("status");
     const lockBtn = $("#lock");
     if (lockBtn) lockBtn.addEventListener("click", async () => {
       if (!lockBtn.dataset.armed) {
