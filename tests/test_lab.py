@@ -142,3 +142,7 @@ def test_run_reports_render_with_examples():
         report = run_report(meta, store.load_run_items(meta["id"]))
         assert "## Examples" in report
         assert ("best layer" in report) == (name == "jpp-readout")
+
+
+def test_server_imports():
+    import lab.server  # noqa: F401  (a syntax error here kept the app from starting)
