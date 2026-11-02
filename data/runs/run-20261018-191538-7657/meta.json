@@ -1,0 +1,1046 @@
+{
+ "id": "run-20261018-191538-7657",
+ "kind": "experiment",
+ "experiment": "silent-mantra",
+ "title": "Silent mantra under a dots-only output (J++)",
+ "spec_sha256": "6e2dfebb32932cebac1c3828c4df1c0f8ea93d4b0900293d1ba3a13ec6d0c2c8",
+ "spec_raw": "# Silent mantra: can the model keep a phrase going \"in its head\" while writing only dots?\n#\n# Built on the focus / neutral / suppress design from Ayonrinde & Lindsey (2026), J++ Lens,\n# Figure 5. Here the carrier is a row of periods instead of a copied sentence. We ask the model\n# to silently repeat a mantra while it writes, then read the J++ lens at every generated token.\n#\n# Question: under the \"repeat silently\" instruction, do the mantra's words show up in the\n# workspace, and do they persist across the whole row of dots? Or do they fade after the\n# first few tokens, the way neutral mentions fade?\n#\n# Two mantras:\n# - \"Om mani padme hum\": tracked word by word. \"padme\", and maybe \"mani\", will likely split\n#   into several tokens and can't be read. The run reports which ones split. \"Om\" and \"hum\"\n#   are the best bets.\n# - \"love\": a single-token control for the same instruction.\n# Every run tracks every word, so each mantra serves as a baseline for the other. \"love\"\n# readouts in the Om runs show how often \"love\" appears unprompted, and the reverse holds too.\n#\n# What would count against the hypothesis:\n# - Focus hit rate is not clearly above both neutral and suppress at mid-to-late layers\n#   (40-56).\n# - Focus hits appear only at the first one or two dot tokens and then drop to the neutral\n#   level. That would mean no sustained mantra, just a lingering trace of the instruction.\n#   Check this in the per-position breakdown.\n# - The mantra words show up equally often in the other mantra's runs. That would be\n#   generic leakage, not the instructed content.\n# Also discard runs where the model writes the mantra instead of dots, and report how many\n# runs that was.\n\nname: silent-mantra\ntitle: Silent mantra under a dots-only output (J++)\ndescription: >\n  The model is told to output only periods while silently repeating a mantra (\"Om mani padme\n  hum\" or \"love\"). Does the mantra appear in the J++ workspace readout across the dot tokens\n  under the focus instruction, more than under neutral mention, suppression, or no\n  instruction, and does it persist across positions instead of decaying?\n\nprompt:\n  system: \"\"\n  user: \"{instruction}\\n\\nNow write only a row of periods, about {count} of them, like this: ..........\\nWrite nothing else.\"\n\nconditions:\n  focus:\n    label: Repeat silently\n    instruction: \"While you write, silently repeat the mantra \\\"{mantra}\\\" in your mind, over and over, with every period. Do not write the mantra.\"\n  neutral:\n    label: Neutral mention\n    instruction: \"Someone mentioned the mantra \\\"{mantra}\\\" earlier today.\"\n  suppress:\n    label: Suppress\n    instruction: \"Don't think about the mantra \\\"{mantra}\\\" while you write.\"\n  none:\n    label: No instruction\n    instruction: \"\"\n\nvariables:\n  mantra: [\"Om mani padme hum\", \"love\"]\n  count: [8, 12, 16, 20, 24, 32, 40, 48]\n\n# The target is fixed, and the Om-mantra words go in also_track. Every run is scored on all\n# of them, so cross-mantra baselines come for free.\ntarget: \"love\"\nalso_track: [Om, om, mani, padme, hum, mantra, chant, prayer, peace]\n\ngeneration:\n  max_tokens: 48\n  temperature: 0\n  stop_words: []\n\nlens:\n  layers: [8, 16, 24, 32, 40, 48, 56]\n  top_k: [1, 5, 10]\n  jacobian: true\n\n# No published values for this task. For context, the paper's focus-on-copy figure\n# (26% at layer 56) is in directed-modulation.yaml.\n",
+ "created": "2026-10-18T19:15:38Z",
+ "model": "Qwen/Qwen3.6-27B",
+ "simulated": false,
+ "n_layers": 64,
+ "layers": [
+  8,
+  16,
+  24,
+  32,
+  40,
+  48,
+  56
+ ],
+ "top_k": [
+  1,
+  5,
+  10
+ ],
+ "seed": 54663,
+ "limit": null,
+ "status": "complete",
+ "progress": {
+  "done": 64,
+  "total": 64
+ },
+ "results": {
+  "conditions": {
+   "focus": {
+    "label": "Repeat silently",
+    "n": 16,
+    "by_k": {
+     "1": {
+      "layers": {
+       "8": {
+        "k": 0,
+        "n": 16,
+        "rate": 0.0,
+        "ci": [
+         0.0,
+         0.19361341827271994
+        ]
+       },
+       "16": {
+        "k": 0,
+        "n": 16,
+        "rate": 0.0,
+        "ci": [
+         0.0,
+         0.19361341827271994
+        ]
+       },
+       "24": {
+        "k": 0,
+        "n": 16,
+        "rate": 0.0,
+        "ci": [
+         0.0,
+         0.19361341827271994
+        ]
+       },
+       "32": {
+        "k": 0,
+        "n": 16,
+        "rate": 0.0,
+        "ci": [
+         0.0,
+         0.19361341827271994
+        ]
+       },
+       "40": {
+        "k": 0,
+        "n": 16,
+        "rate": 0.0,
+        "ci": [
+         0.0,
+         0.19361341827271994
+        ]
+       },
+       "48": {
+        "k": 0,
+        "n": 16,
+        "rate": 0.0,
+        "ci": [
+         0.0,
+         0.19361341827271994
+        ]
+       },
+       "56": {
+        "k": 0,
+        "n": 16,
+        "rate": 0.0,
+        "ci": [
+         0.0,
+         0.19361341827271994
+        ]
+       }
+      },
+      "any_layer": {
+       "k": 0,
+       "n": 16,
+       "rate": 0.0
+      }
+     },
+     "5": {
+      "layers": {
+       "8": {
+        "k": 0,
+        "n": 16,
+        "rate": 0.0,
+        "ci": [
+         0.0,
+         0.19361341827271994
+        ]
+       },
+       "16": {
+        "k": 0,
+        "n": 16,
+        "rate": 0.0,
+        "ci": [
+         0.0,
+         0.19361341827271994
+        ]
+       },
+       "24": {
+        "k": 0,
+        "n": 16,
+        "rate": 0.0,
+        "ci": [
+         0.0,
+         0.19361341827271994
+        ]
+       },
+       "32": {
+        "k": 0,
+        "n": 16,
+        "rate": 0.0,
+        "ci": [
+         0.0,
+         0.19361341827271994
+        ]
+       },
+       "40": {
+        "k": 0,
+        "n": 16,
+        "rate": 0.0,
+        "ci": [
+         0.0,
+         0.19361341827271994
+        ]
+       },
+       "48": {
+        "k": 0,
+        "n": 16,
+        "rate": 0.0,
+        "ci": [
+         0.0,
+         0.19361341827271994
+        ]
+       },
+       "56": {
+        "k": 0,
+        "n": 16,
+        "rate": 0.0,
+        "ci": [
+         0.0,
+         0.19361341827271994
+        ]
+       }
+      },
+      "any_layer": {
+       "k": 0,
+       "n": 16,
+       "rate": 0.0
+      }
+     },
+     "10": {
+      "layers": {
+       "8": {
+        "k": 0,
+        "n": 16,
+        "rate": 0.0,
+        "ci": [
+         0.0,
+         0.19361341827271994
+        ]
+       },
+       "16": {
+        "k": 0,
+        "n": 16,
+        "rate": 0.0,
+        "ci": [
+         0.0,
+         0.19361341827271994
+        ]
+       },
+       "24": {
+        "k": 0,
+        "n": 16,
+        "rate": 0.0,
+        "ci": [
+         0.0,
+         0.19361341827271994
+        ]
+       },
+       "32": {
+        "k": 0,
+        "n": 16,
+        "rate": 0.0,
+        "ci": [
+         0.0,
+         0.19361341827271994
+        ]
+       },
+       "40": {
+        "k": 0,
+        "n": 16,
+        "rate": 0.0,
+        "ci": [
+         0.0,
+         0.19361341827271994
+        ]
+       },
+       "48": {
+        "k": 0,
+        "n": 16,
+        "rate": 0.0,
+        "ci": [
+         0.0,
+         0.19361341827271994
+        ]
+       },
+       "56": {
+        "k": 0,
+        "n": 16,
+        "rate": 0.0,
+        "ci": [
+         0.0,
+         0.19361341827271994
+        ]
+       }
+      },
+      "any_layer": {
+       "k": 0,
+       "n": 16,
+       "rate": 0.0
+      }
+     }
+    },
+    "tracked": {
+     "8": {
+      "k": 0,
+      "n": 16
+     },
+     "16": {
+      "k": 0,
+      "n": 16
+     },
+     "24": {
+      "k": 0,
+      "n": 16
+     },
+     "32": {
+      "k": 0,
+      "n": 16
+     },
+     "40": {
+      "k": 0,
+      "n": 16
+     },
+     "48": {
+      "k": 0,
+      "n": 16
+     },
+     "56": {
+      "k": 0,
+      "n": 16
+     }
+    }
+   },
+   "neutral": {
+    "label": "Neutral mention",
+    "n": 16,
+    "by_k": {
+     "1": {
+      "layers": {
+       "8": {
+        "k": 0,
+        "n": 16,
+        "rate": 0.0,
+        "ci": [
+         0.0,
+         0.19361341827271994
+        ]
+       },
+       "16": {
+        "k": 0,
+        "n": 16,
+        "rate": 0.0,
+        "ci": [
+         0.0,
+         0.19361341827271994
+        ]
+       },
+       "24": {
+        "k": 0,
+        "n": 16,
+        "rate": 0.0,
+        "ci": [
+         0.0,
+         0.19361341827271994
+        ]
+       },
+       "32": {
+        "k": 0,
+        "n": 16,
+        "rate": 0.0,
+        "ci": [
+         0.0,
+         0.19361341827271994
+        ]
+       },
+       "40": {
+        "k": 0,
+        "n": 16,
+        "rate": 0.0,
+        "ci": [
+         0.0,
+         0.19361341827271994
+        ]
+       },
+       "48": {
+        "k": 0,
+        "n": 16,
+        "rate": 0.0,
+        "ci": [
+         0.0,
+         0.19361341827271994
+        ]
+       },
+       "56": {
+        "k": 0,
+        "n": 16,
+        "rate": 0.0,
+        "ci": [
+         0.0,
+         0.19361341827271994
+        ]
+       }
+      },
+      "any_layer": {
+       "k": 0,
+       "n": 16,
+       "rate": 0.0
+      }
+     },
+     "5": {
+      "layers": {
+       "8": {
+        "k": 0,
+        "n": 16,
+        "rate": 0.0,
+        "ci": [
+         0.0,
+         0.19361341827271994
+        ]
+       },
+       "16": {
+        "k": 0,
+        "n": 16,
+        "rate": 0.0,
+        "ci": [
+         0.0,
+         0.19361341827271994
+        ]
+       },
+       "24": {
+        "k": 0,
+        "n": 16,
+        "rate": 0.0,
+        "ci": [
+         0.0,
+         0.19361341827271994
+        ]
+       },
+       "32": {
+        "k": 0,
+        "n": 16,
+        "rate": 0.0,
+        "ci": [
+         0.0,
+         0.19361341827271994
+        ]
+       },
+       "40": {
+        "k": 0,
+        "n": 16,
+        "rate": 0.0,
+        "ci": [
+         0.0,
+         0.19361341827271994
+        ]
+       },
+       "48": {
+        "k": 0,
+        "n": 16,
+        "rate": 0.0,
+        "ci": [
+         0.0,
+         0.19361341827271994
+        ]
+       },
+       "56": {
+        "k": 0,
+        "n": 16,
+        "rate": 0.0,
+        "ci": [
+         0.0,
+         0.19361341827271994
+        ]
+       }
+      },
+      "any_layer": {
+       "k": 0,
+       "n": 16,
+       "rate": 0.0
+      }
+     },
+     "10": {
+      "layers": {
+       "8": {
+        "k": 0,
+        "n": 16,
+        "rate": 0.0,
+        "ci": [
+         0.0,
+         0.19361341827271994
+        ]
+       },
+       "16": {
+        "k": 0,
+        "n": 16,
+        "rate": 0.0,
+        "ci": [
+         0.0,
+         0.19361341827271994
+        ]
+       },
+       "24": {
+        "k": 0,
+        "n": 16,
+        "rate": 0.0,
+        "ci": [
+         0.0,
+         0.19361341827271994
+        ]
+       },
+       "32": {
+        "k": 0,
+        "n": 16,
+        "rate": 0.0,
+        "ci": [
+         0.0,
+         0.19361341827271994
+        ]
+       },
+       "40": {
+        "k": 0,
+        "n": 16,
+        "rate": 0.0,
+        "ci": [
+         0.0,
+         0.19361341827271994
+        ]
+       },
+       "48": {
+        "k": 0,
+        "n": 16,
+        "rate": 0.0,
+        "ci": [
+         0.0,
+         0.19361341827271994
+        ]
+       },
+       "56": {
+        "k": 0,
+        "n": 16,
+        "rate": 0.0,
+        "ci": [
+         0.0,
+         0.19361341827271994
+        ]
+       }
+      },
+      "any_layer": {
+       "k": 0,
+       "n": 16,
+       "rate": 0.0
+      }
+     }
+    },
+    "tracked": {
+     "8": {
+      "k": 0,
+      "n": 16
+     },
+     "16": {
+      "k": 0,
+      "n": 16
+     },
+     "24": {
+      "k": 0,
+      "n": 16
+     },
+     "32": {
+      "k": 0,
+      "n": 16
+     },
+     "40": {
+      "k": 0,
+      "n": 16
+     },
+     "48": {
+      "k": 0,
+      "n": 16
+     },
+     "56": {
+      "k": 0,
+      "n": 16
+     }
+    }
+   },
+   "suppress": {
+    "label": "Suppress",
+    "n": 16,
+    "by_k": {
+     "1": {
+      "layers": {
+       "8": {
+        "k": 0,
+        "n": 16,
+        "rate": 0.0,
+        "ci": [
+         0.0,
+         0.19361341827271994
+        ]
+       },
+       "16": {
+        "k": 0,
+        "n": 16,
+        "rate": 0.0,
+        "ci": [
+         0.0,
+         0.19361341827271994
+        ]
+       },
+       "24": {
+        "k": 0,
+        "n": 16,
+        "rate": 0.0,
+        "ci": [
+         0.0,
+         0.19361341827271994
+        ]
+       },
+       "32": {
+        "k": 0,
+        "n": 16,
+        "rate": 0.0,
+        "ci": [
+         0.0,
+         0.19361341827271994
+        ]
+       },
+       "40": {
+        "k": 0,
+        "n": 16,
+        "rate": 0.0,
+        "ci": [
+         0.0,
+         0.19361341827271994
+        ]
+       },
+       "48": {
+        "k": 0,
+        "n": 16,
+        "rate": 0.0,
+        "ci": [
+         0.0,
+         0.19361341827271994
+        ]
+       },
+       "56": {
+        "k": 0,
+        "n": 16,
+        "rate": 0.0,
+        "ci": [
+         0.0,
+         0.19361341827271994
+        ]
+       }
+      },
+      "any_layer": {
+       "k": 0,
+       "n": 16,
+       "rate": 0.0
+      }
+     },
+     "5": {
+      "layers": {
+       "8": {
+        "k": 0,
+        "n": 16,
+        "rate": 0.0,
+        "ci": [
+         0.0,
+         0.19361341827271994
+        ]
+       },
+       "16": {
+        "k": 0,
+        "n": 16,
+        "rate": 0.0,
+        "ci": [
+         0.0,
+         0.19361341827271994
+        ]
+       },
+       "24": {
+        "k": 0,
+        "n": 16,
+        "rate": 0.0,
+        "ci": [
+         0.0,
+         0.19361341827271994
+        ]
+       },
+       "32": {
+        "k": 0,
+        "n": 16,
+        "rate": 0.0,
+        "ci": [
+         0.0,
+         0.19361341827271994
+        ]
+       },
+       "40": {
+        "k": 0,
+        "n": 16,
+        "rate": 0.0,
+        "ci": [
+         0.0,
+         0.19361341827271994
+        ]
+       },
+       "48": {
+        "k": 0,
+        "n": 16,
+        "rate": 0.0,
+        "ci": [
+         0.0,
+         0.19361341827271994
+        ]
+       },
+       "56": {
+        "k": 0,
+        "n": 16,
+        "rate": 0.0,
+        "ci": [
+         0.0,
+         0.19361341827271994
+        ]
+       }
+      },
+      "any_layer": {
+       "k": 0,
+       "n": 16,
+       "rate": 0.0
+      }
+     },
+     "10": {
+      "layers": {
+       "8": {
+        "k": 0,
+        "n": 16,
+        "rate": 0.0,
+        "ci": [
+         0.0,
+         0.19361341827271994
+        ]
+       },
+       "16": {
+        "k": 0,
+        "n": 16,
+        "rate": 0.0,
+        "ci": [
+         0.0,
+         0.19361341827271994
+        ]
+       },
+       "24": {
+        "k": 0,
+        "n": 16,
+        "rate": 0.0,
+        "ci": [
+         0.0,
+         0.19361341827271994
+        ]
+       },
+       "32": {
+        "k": 0,
+        "n": 16,
+        "rate": 0.0,
+        "ci": [
+         0.0,
+         0.19361341827271994
+        ]
+       },
+       "40": {
+        "k": 0,
+        "n": 16,
+        "rate": 0.0,
+        "ci": [
+         0.0,
+         0.19361341827271994
+        ]
+       },
+       "48": {
+        "k": 0,
+        "n": 16,
+        "rate": 0.0,
+        "ci": [
+         0.0,
+         0.19361341827271994
+        ]
+       },
+       "56": {
+        "k": 0,
+        "n": 16,
+        "rate": 0.0,
+        "ci": [
+         0.0,
+         0.19361341827271994
+        ]
+       }
+      },
+      "any_layer": {
+       "k": 0,
+       "n": 16,
+       "rate": 0.0
+      }
+     }
+    },
+    "tracked": {
+     "8": {
+      "k": 0,
+      "n": 16
+     },
+     "16": {
+      "k": 0,
+      "n": 16
+     },
+     "24": {
+      "k": 0,
+      "n": 16
+     },
+     "32": {
+      "k": 0,
+      "n": 16
+     },
+     "40": {
+      "k": 0,
+      "n": 16
+     },
+     "48": {
+      "k": 0,
+      "n": 16
+     },
+     "56": {
+      "k": 0,
+      "n": 16
+     }
+    }
+   },
+   "none": {
+    "label": "No instruction",
+    "n": 16,
+    "by_k": {
+     "1": {
+      "layers": {
+       "8": {
+        "k": 0,
+        "n": 16,
+        "rate": 0.0,
+        "ci": [
+         0.0,
+         0.19361341827271994
+        ]
+       },
+       "16": {
+        "k": 0,
+        "n": 16,
+        "rate": 0.0,
+        "ci": [
+         0.0,
+         0.19361341827271994
+        ]
+       },
+       "24": {
+        "k": 0,
+        "n": 16,
+        "rate": 0.0,
+        "ci": [
+         0.0,
+         0.19361341827271994
+        ]
+       },
+       "32": {
+        "k": 0,
+        "n": 16,
+        "rate": 0.0,
+        "ci": [
+         0.0,
+         0.19361341827271994
+        ]
+       },
+       "40": {
+        "k": 0,
+        "n": 16,
+        "rate": 0.0,
+        "ci": [
+         0.0,
+         0.19361341827271994
+        ]
+       },
+       "48": {
+        "k": 0,
+        "n": 16,
+        "rate": 0.0,
+        "ci": [
+         0.0,
+         0.19361341827271994
+        ]
+       },
+       "56": {
+        "k": 0,
+        "n": 16,
+        "rate": 0.0,
+        "ci": [
+         0.0,
+         0.19361341827271994
+        ]
+       }
+      },
+      "any_layer": {
+       "k": 0,
+       "n": 16,
+       "rate": 0.0
+      }
+     },
+     "5": {
+      "layers": {
+       "8": {
+        "k": 0,
+        "n": 16,
+        "rate": 0.0,
+        "ci": [
+         0.0,
+         0.19361341827271994
+        ]
+       },
+       "16": {
+        "k": 0,
+        "n": 16,
+        "rate": 0.0,
+        "ci": [
+         0.0,
+         0.19361341827271994
+        ]
+       },
+       "24": {
+        "k": 0,
+        "n": 16,
+        "rate": 0.0,
+        "ci": [
+         0.0,
+         0.19361341827271994
+        ]
+       },
+       "32": {
+        "k": 0,
+        "n": 16,
+        "rate": 0.0,
+        "ci": [
+         0.0,
+         0.19361341827271994
+        ]
+       },
+       "40": {
+        "k": 0,
+        "n": 16,
+        "rate": 0.0,
+        "ci": [
+         0.0,
+         0.19361341827271994
+        ]
+       },
+       "48": {
+        "k": 0,
+        "n": 16,
+        "rate": 0.0,
+        "ci": [
+         0.0,
+         0.19361341827271994
+        ]
+       },
+       "56": {
+        "k": 0,
+        "n": 16,
+        "rate": 0.0,
+        "ci": [
+         0.0,
+         0.19361341827271994
+        ]
+       }
+      },
+      "any_layer": {
+       "k": 0,
+       "n": 16,
+       "rate": 0.0
+      }
+     },
+     "10": {
+      "layers": {
+       "8": {
+        "k": 0,
+        "n": 16,
+        "rate": 0.0,
+        "ci": [
+         0.0,
+         0.19361341827271994
+        ]
+       },
+       "16": {
+        "k": 0,
+        "n": 16,
+        "rate": 0.0,
+        "ci": [
+         0.0,
+         0.19361341827271994
+        ]
+       },
+       "24": {
+        "k": 0,
+        "n": 16,
+        "rate": 0.0,
+        "ci": [
+         0.0,
+         0.19361341827271994
+        ]
+       },
+       "32": {
+        "k": 0,
+        "n": 16,
+        "rate": 0.0,
+        "ci": [
+         0.0,
+         0.19361341827271994
+        ]
+       },
+       "40": {
+        "k": 0,
+        "n": 16,
+        "rate": 0.0,
+        "ci": [
+         0.0,
+         0.19361341827271994
+        ]
+       },
+       "48": {
+        "k": 0,
+        "n": 16,
+        "rate": 0.0,
+        "ci": [
+         0.0,
+         0.19361341827271994
+        ]
+       },
+       "56": {
+        "k": 0,
+        "n": 16,
+        "rate": 0.0,
+        "ci": [
+         0.0,
+         0.19361341827271994
+        ]
+       }
+      },
+      "any_layer": {
+       "k": 0,
+       "n": 16,
+       "rate": 0.0
+      }
+     }
+    },
+    "tracked": {
+     "8": {
+      "k": 0,
+      "n": 16
+     },
+     "16": {
+      "k": 0,
+      "n": 16
+     },
+     "24": {
+      "k": 0,
+      "n": 16
+     },
+     "32": {
+      "k": 0,
+      "n": 16
+     },
+     "40": {
+      "k": 0,
+      "n": 16
+     },
+     "48": {
+      "k": 0,
+      "n": 16
+     },
+     "56": {
+      "k": 0,
+      "n": 16
+     }
+    }
+   }
+  },
+  "invisible_targets": []
+ }
+}

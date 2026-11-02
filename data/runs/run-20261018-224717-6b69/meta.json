@@ -1,0 +1,1046 @@
+{
+ "id": "run-20261018-224717-6b69",
+ "kind": "experiment",
+ "experiment": "silent-recitation",
+ "title": "Silent recitation (J++)",
+ "spec_sha256": "9a544b9636f997c8a3e65b4e74017c1e03eff855c2f60580a47f7a1b8036a33e",
+ "spec_raw": "# Silent recitation: the mantra sets the pattern of beads, so keeping track of it is part of\n# the task.\n#\n# Why this design: in silent-mantra-beads, -emoji and -dots (run-20261018-200628-e3cd,\n# run-20261018-211829-f4d9, run-20261018-220132-aa66), \"silently repeat X\" changed nothing the\n# model had to write. The word showed up only where the output was open: the first bead and\n# the last. The middle layers held the bead count (\"four, five, six\", then \"last\"), the same in\n# every condition. The copy task behaves the same way: in directed-modulation\n# (run-20261018-183502-b064) the focus concept is in the L56 top-10 at 79% of final periods and\n# 11.6% of the copied tokens before them.\n#\n# Here every condition writes the same given pattern (\u25cf\u25cf\u25cb for a 3-word phrase, \u25cf\u25cf\u25cf\u25cb for 4),\n# one bead per word, and the \u25cb falls on the last word. Only \"recite\" asks the model to line the\n# phrase up with the beads. If it does that inside, the lens should show word i mod n on\n# bead i (\"on phase\") more often than the phrase's other words on the same beads (\"off phase\").\n# Neutral mention, suppress and no instruction write the same beads and give the baselines.\n#\n# Phrases, every word one token (checked with the Qwen tokenizer, \" Word\" or \" word\"):\n# - om ah hum: a three-syllable Vajrayana mantra. \"ah\" is also an everyday interjection, so\n#   check its no-instruction baseline.\n# - hare krishna hare rama: four words, \"hare\" twice, so on-phase \"hare\" is two beads in four.\n# - sun moon star sea: the same shape with no contemplative meaning, the non-mantra control.\n#\n# What would count against silent recitation:\n# - Recite is no more on phase than off phase, or no more on phase than neutral and suppress.\n# - On phase only on the first round, or only at the \u25cb (the last word is named in the recite\n#   instruction, so a \u25cb-only effect could be the instruction, not the recitation).\n# - The mantras and the control behave the same: then it's tracking a sequence, not anything\n#   about mantras (still a result).\n# Also check the pattern is right (the Recitation table); phase tables use only those items.\n\nname: silent-recitation\ntitle: Silent recitation (J++)\ndescription: >\n  Every condition writes the same pattern of beads, one per word of a phrase, \u25cb on the last\n  word: om ah hum, hare krishna hare rama, or the control sun moon star sea. Under \"recite\n  silently\", does the lens show the phrase word that belongs to each bead, bead by bead,\n  more than the other words, and more than under neutral mention, suppression or no\n  instruction?\n\nprompt:\n  system: \"\"\n  user: \"{instruction}\\n\\nWrite {mantra[unit]} {rounds} times in a row, with nothing between. Write nothing else.\"\n\nconditions:\n  focus:\n    label: Recite silently\n    instruction:\n      - \"As you write, silently recite \\\"{mantra[text]}\\\", one word for each bead, so that each \u25cb falls on \\\"{mantra[last]}\\\". Don't write the words.\"\n      - \"Say \\\"{mantra[text]}\\\" to yourself silently while you write: one word per bead, round after round, landing on \\\"{mantra[last]}\\\" at each \u25cb. Only the beads go on the page.\"\n      - \"Each bead is one word of \\\"{mantra[text]}\\\", recited silently, and each \u25cb is \\\"{mantra[last]}\\\". Keep the recitation going in your mind to the end. Do not write the words.\"\n  neutral:\n    label: Neutral mention\n    instruction:\n      - \"The phrase \\\"{mantra[text]}\\\" came up in conversation earlier today.\"\n      - \"Someone wrote \\\"{mantra[text]}\\\" in an email this morning.\"\n      - \"\\\"{mantra[text]}\\\" was on a list of phrases I read yesterday.\"\n  suppress:\n    label: Suppress\n    instruction:\n      - \"Don't think about the phrase \\\"{mantra[text]}\\\" while you write.\"\n      - \"While you write, keep \\\"{mantra[text]}\\\" out of your mind.\"\n      - \"Try not to think of \\\"{mantra[text]}\\\" at all as you write.\"\n  none:\n    label: No instruction\n    instruction: \"\"\n\n# Each mantra entry links the phrase, its last word and its bead pattern. The no-instruction\n# condition still gets the phrase's pattern, so the beads match across conditions.\nvariables:\n  mantra:\n    - {text: \"om ah hum\", last: \"hum\", unit: \"\u25cf\u25cf\u25cb\"}\n    - {text: \"hare krishna hare rama\", last: \"rama\", unit: \"\u25cf\u25cf\u25cf\u25cb\"}\n    - {text: \"sun moon star sea\", last: \"sea\", unit: \"\u25cf\u25cf\u25cf\u25cb\"}\n  rounds: [3, 4, 5, 6, 7]\n\n# A phrase target scores every word: a hit is any of them. `expect` is one round of beads;\n# the report checks the output against it and reads the lens bead by bead in phase.\ntarget: \"{mantra[text]}\"\nexpect: \"{mantra[unit]}\"\nalso_track: [fail, failed, failure, damn, mantra]\n\ngeneration:\n  max_tokens: 40   # \u25cf and \u25cb are one token each; 7 rounds of 4 is 28\n  temperature: 0\n  stop_words: []\n\nlens:\n  layers: [8, 16, 24, 32, 40, 48, 56]\n  top_k: [1, 5, 10]\n  jacobian: true\n",
+ "created": "2026-10-18T22:47:17Z",
+ "model": "Qwen/Qwen3.6-27B",
+ "simulated": false,
+ "n_layers": 64,
+ "layers": [
+  8,
+  16,
+  24,
+  32,
+  40,
+  48,
+  56
+ ],
+ "top_k": [
+  1,
+  5,
+  10
+ ],
+ "seed": 204661,
+ "limit": null,
+ "status": "complete",
+ "progress": {
+  "done": 150,
+  "total": 150
+ },
+ "results": {
+  "conditions": {
+   "focus": {
+    "label": "Recite silently",
+    "n": 45,
+    "by_k": {
+     "1": {
+      "layers": {
+       "8": {
+        "k": 0,
+        "n": 45,
+        "rate": 0.0,
+        "ci": [
+         0.0,
+         0.07865426194064076
+        ]
+       },
+       "16": {
+        "k": 0,
+        "n": 45,
+        "rate": 0.0,
+        "ci": [
+         0.0,
+         0.07865426194064076
+        ]
+       },
+       "24": {
+        "k": 0,
+        "n": 45,
+        "rate": 0.0,
+        "ci": [
+         0.0,
+         0.07865426194064076
+        ]
+       },
+       "32": {
+        "k": 0,
+        "n": 45,
+        "rate": 0.0,
+        "ci": [
+         0.0,
+         0.07865426194064076
+        ]
+       },
+       "40": {
+        "k": 0,
+        "n": 45,
+        "rate": 0.0,
+        "ci": [
+         0.0,
+         0.07865426194064076
+        ]
+       },
+       "48": {
+        "k": 0,
+        "n": 45,
+        "rate": 0.0,
+        "ci": [
+         0.0,
+         0.07865426194064076
+        ]
+       },
+       "56": {
+        "k": 0,
+        "n": 45,
+        "rate": 0.0,
+        "ci": [
+         0.0,
+         0.07865426194064076
+        ]
+       }
+      },
+      "any_layer": {
+       "k": 0,
+       "n": 45,
+       "rate": 0.0
+      }
+     },
+     "5": {
+      "layers": {
+       "8": {
+        "k": 0,
+        "n": 45,
+        "rate": 0.0,
+        "ci": [
+         0.0,
+         0.07865426194064076
+        ]
+       },
+       "16": {
+        "k": 0,
+        "n": 45,
+        "rate": 0.0,
+        "ci": [
+         0.0,
+         0.07865426194064076
+        ]
+       },
+       "24": {
+        "k": 0,
+        "n": 45,
+        "rate": 0.0,
+        "ci": [
+         0.0,
+         0.07865426194064076
+        ]
+       },
+       "32": {
+        "k": 0,
+        "n": 45,
+        "rate": 0.0,
+        "ci": [
+         0.0,
+         0.07865426194064076
+        ]
+       },
+       "40": {
+        "k": 0,
+        "n": 45,
+        "rate": 0.0,
+        "ci": [
+         0.0,
+         0.07865426194064076
+        ]
+       },
+       "48": {
+        "k": 0,
+        "n": 45,
+        "rate": 0.0,
+        "ci": [
+         0.0,
+         0.07865426194064076
+        ]
+       },
+       "56": {
+        "k": 5,
+        "n": 45,
+        "rate": 0.1111111111111111,
+        "ci": [
+         0.04840400437825558,
+         0.23499375490890945
+        ]
+       }
+      },
+      "any_layer": {
+       "k": 5,
+       "n": 45,
+       "rate": 0.1111111111111111
+      }
+     },
+     "10": {
+      "layers": {
+       "8": {
+        "k": 0,
+        "n": 45,
+        "rate": 0.0,
+        "ci": [
+         0.0,
+         0.07865426194064076
+        ]
+       },
+       "16": {
+        "k": 0,
+        "n": 45,
+        "rate": 0.0,
+        "ci": [
+         0.0,
+         0.07865426194064076
+        ]
+       },
+       "24": {
+        "k": 0,
+        "n": 45,
+        "rate": 0.0,
+        "ci": [
+         0.0,
+         0.07865426194064076
+        ]
+       },
+       "32": {
+        "k": 0,
+        "n": 45,
+        "rate": 0.0,
+        "ci": [
+         0.0,
+         0.07865426194064076
+        ]
+       },
+       "40": {
+        "k": 0,
+        "n": 45,
+        "rate": 0.0,
+        "ci": [
+         0.0,
+         0.07865426194064076
+        ]
+       },
+       "48": {
+        "k": 0,
+        "n": 45,
+        "rate": 0.0,
+        "ci": [
+         0.0,
+         0.07865426194064076
+        ]
+       },
+       "56": {
+        "k": 7,
+        "n": 45,
+        "rate": 0.15555555555555556,
+        "ci": [
+         0.07745325311328677,
+         0.28784190511248803
+        ]
+       }
+      },
+      "any_layer": {
+       "k": 7,
+       "n": 45,
+       "rate": 0.15555555555555556
+      }
+     }
+    },
+    "tracked": {
+     "8": {
+      "k": 0,
+      "n": 45
+     },
+     "16": {
+      "k": 0,
+      "n": 45
+     },
+     "24": {
+      "k": 0,
+      "n": 45
+     },
+     "32": {
+      "k": 0,
+      "n": 45
+     },
+     "40": {
+      "k": 0,
+      "n": 45
+     },
+     "48": {
+      "k": 0,
+      "n": 45
+     },
+     "56": {
+      "k": 0,
+      "n": 45
+     }
+    }
+   },
+   "neutral": {
+    "label": "Neutral mention",
+    "n": 45,
+    "by_k": {
+     "1": {
+      "layers": {
+       "8": {
+        "k": 0,
+        "n": 45,
+        "rate": 0.0,
+        "ci": [
+         0.0,
+         0.07865426194064076
+        ]
+       },
+       "16": {
+        "k": 0,
+        "n": 45,
+        "rate": 0.0,
+        "ci": [
+         0.0,
+         0.07865426194064076
+        ]
+       },
+       "24": {
+        "k": 0,
+        "n": 45,
+        "rate": 0.0,
+        "ci": [
+         0.0,
+         0.07865426194064076
+        ]
+       },
+       "32": {
+        "k": 0,
+        "n": 45,
+        "rate": 0.0,
+        "ci": [
+         0.0,
+         0.07865426194064076
+        ]
+       },
+       "40": {
+        "k": 0,
+        "n": 45,
+        "rate": 0.0,
+        "ci": [
+         0.0,
+         0.07865426194064076
+        ]
+       },
+       "48": {
+        "k": 0,
+        "n": 45,
+        "rate": 0.0,
+        "ci": [
+         0.0,
+         0.07865426194064076
+        ]
+       },
+       "56": {
+        "k": 0,
+        "n": 45,
+        "rate": 0.0,
+        "ci": [
+         0.0,
+         0.07865426194064076
+        ]
+       }
+      },
+      "any_layer": {
+       "k": 0,
+       "n": 45,
+       "rate": 0.0
+      }
+     },
+     "5": {
+      "layers": {
+       "8": {
+        "k": 0,
+        "n": 45,
+        "rate": 0.0,
+        "ci": [
+         0.0,
+         0.07865426194064076
+        ]
+       },
+       "16": {
+        "k": 0,
+        "n": 45,
+        "rate": 0.0,
+        "ci": [
+         0.0,
+         0.07865426194064076
+        ]
+       },
+       "24": {
+        "k": 0,
+        "n": 45,
+        "rate": 0.0,
+        "ci": [
+         0.0,
+         0.07865426194064076
+        ]
+       },
+       "32": {
+        "k": 0,
+        "n": 45,
+        "rate": 0.0,
+        "ci": [
+         0.0,
+         0.07865426194064076
+        ]
+       },
+       "40": {
+        "k": 0,
+        "n": 45,
+        "rate": 0.0,
+        "ci": [
+         0.0,
+         0.07865426194064076
+        ]
+       },
+       "48": {
+        "k": 0,
+        "n": 45,
+        "rate": 0.0,
+        "ci": [
+         0.0,
+         0.07865426194064076
+        ]
+       },
+       "56": {
+        "k": 0,
+        "n": 45,
+        "rate": 0.0,
+        "ci": [
+         0.0,
+         0.07865426194064076
+        ]
+       }
+      },
+      "any_layer": {
+       "k": 0,
+       "n": 45,
+       "rate": 0.0
+      }
+     },
+     "10": {
+      "layers": {
+       "8": {
+        "k": 0,
+        "n": 45,
+        "rate": 0.0,
+        "ci": [
+         0.0,
+         0.07865426194064076
+        ]
+       },
+       "16": {
+        "k": 0,
+        "n": 45,
+        "rate": 0.0,
+        "ci": [
+         0.0,
+         0.07865426194064076
+        ]
+       },
+       "24": {
+        "k": 0,
+        "n": 45,
+        "rate": 0.0,
+        "ci": [
+         0.0,
+         0.07865426194064076
+        ]
+       },
+       "32": {
+        "k": 0,
+        "n": 45,
+        "rate": 0.0,
+        "ci": [
+         0.0,
+         0.07865426194064076
+        ]
+       },
+       "40": {
+        "k": 0,
+        "n": 45,
+        "rate": 0.0,
+        "ci": [
+         0.0,
+         0.07865426194064076
+        ]
+       },
+       "48": {
+        "k": 0,
+        "n": 45,
+        "rate": 0.0,
+        "ci": [
+         0.0,
+         0.07865426194064076
+        ]
+       },
+       "56": {
+        "k": 0,
+        "n": 45,
+        "rate": 0.0,
+        "ci": [
+         0.0,
+         0.07865426194064076
+        ]
+       }
+      },
+      "any_layer": {
+       "k": 0,
+       "n": 45,
+       "rate": 0.0
+      }
+     }
+    },
+    "tracked": {
+     "8": {
+      "k": 0,
+      "n": 45
+     },
+     "16": {
+      "k": 0,
+      "n": 45
+     },
+     "24": {
+      "k": 0,
+      "n": 45
+     },
+     "32": {
+      "k": 0,
+      "n": 45
+     },
+     "40": {
+      "k": 0,
+      "n": 45
+     },
+     "48": {
+      "k": 0,
+      "n": 45
+     },
+     "56": {
+      "k": 0,
+      "n": 45
+     }
+    }
+   },
+   "suppress": {
+    "label": "Suppress",
+    "n": 45,
+    "by_k": {
+     "1": {
+      "layers": {
+       "8": {
+        "k": 0,
+        "n": 45,
+        "rate": 0.0,
+        "ci": [
+         0.0,
+         0.07865426194064076
+        ]
+       },
+       "16": {
+        "k": 0,
+        "n": 45,
+        "rate": 0.0,
+        "ci": [
+         0.0,
+         0.07865426194064076
+        ]
+       },
+       "24": {
+        "k": 0,
+        "n": 45,
+        "rate": 0.0,
+        "ci": [
+         0.0,
+         0.07865426194064076
+        ]
+       },
+       "32": {
+        "k": 0,
+        "n": 45,
+        "rate": 0.0,
+        "ci": [
+         0.0,
+         0.07865426194064076
+        ]
+       },
+       "40": {
+        "k": 0,
+        "n": 45,
+        "rate": 0.0,
+        "ci": [
+         0.0,
+         0.07865426194064076
+        ]
+       },
+       "48": {
+        "k": 0,
+        "n": 45,
+        "rate": 0.0,
+        "ci": [
+         0.0,
+         0.07865426194064076
+        ]
+       },
+       "56": {
+        "k": 0,
+        "n": 45,
+        "rate": 0.0,
+        "ci": [
+         0.0,
+         0.07865426194064076
+        ]
+       }
+      },
+      "any_layer": {
+       "k": 0,
+       "n": 45,
+       "rate": 0.0
+      }
+     },
+     "5": {
+      "layers": {
+       "8": {
+        "k": 0,
+        "n": 45,
+        "rate": 0.0,
+        "ci": [
+         0.0,
+         0.07865426194064076
+        ]
+       },
+       "16": {
+        "k": 0,
+        "n": 45,
+        "rate": 0.0,
+        "ci": [
+         0.0,
+         0.07865426194064076
+        ]
+       },
+       "24": {
+        "k": 0,
+        "n": 45,
+        "rate": 0.0,
+        "ci": [
+         0.0,
+         0.07865426194064076
+        ]
+       },
+       "32": {
+        "k": 0,
+        "n": 45,
+        "rate": 0.0,
+        "ci": [
+         0.0,
+         0.07865426194064076
+        ]
+       },
+       "40": {
+        "k": 1,
+        "n": 45,
+        "rate": 0.022222222222222223,
+        "ci": [
+         0.003933497522757505,
+         0.11566946388718813
+        ]
+       },
+       "48": {
+        "k": 1,
+        "n": 45,
+        "rate": 0.022222222222222223,
+        "ci": [
+         0.003933497522757505,
+         0.11566946388718813
+        ]
+       },
+       "56": {
+        "k": 2,
+        "n": 45,
+        "rate": 0.044444444444444446,
+        "ci": [
+         0.012273869040444335,
+         0.14827779183880616
+        ]
+       }
+      },
+      "any_layer": {
+       "k": 4,
+       "n": 45,
+       "rate": 0.08888888888888889
+      }
+     },
+     "10": {
+      "layers": {
+       "8": {
+        "k": 0,
+        "n": 45,
+        "rate": 0.0,
+        "ci": [
+         0.0,
+         0.07865426194064076
+        ]
+       },
+       "16": {
+        "k": 0,
+        "n": 45,
+        "rate": 0.0,
+        "ci": [
+         0.0,
+         0.07865426194064076
+        ]
+       },
+       "24": {
+        "k": 0,
+        "n": 45,
+        "rate": 0.0,
+        "ci": [
+         0.0,
+         0.07865426194064076
+        ]
+       },
+       "32": {
+        "k": 0,
+        "n": 45,
+        "rate": 0.0,
+        "ci": [
+         0.0,
+         0.07865426194064076
+        ]
+       },
+       "40": {
+        "k": 1,
+        "n": 45,
+        "rate": 0.022222222222222223,
+        "ci": [
+         0.003933497522757505,
+         0.11566946388718813
+        ]
+       },
+       "48": {
+        "k": 4,
+        "n": 45,
+        "rate": 0.08888888888888889,
+        "ci": [
+         0.035110548134203154,
+         0.20733851168365702
+        ]
+       },
+       "56": {
+        "k": 4,
+        "n": 45,
+        "rate": 0.08888888888888889,
+        "ci": [
+         0.035110548134203154,
+         0.20733851168365702
+        ]
+       }
+      },
+      "any_layer": {
+       "k": 8,
+       "n": 45,
+       "rate": 0.17777777777777778
+      }
+     }
+    },
+    "tracked": {
+     "8": {
+      "k": 0,
+      "n": 45
+     },
+     "16": {
+      "k": 0,
+      "n": 45
+     },
+     "24": {
+      "k": 0,
+      "n": 45
+     },
+     "32": {
+      "k": 0,
+      "n": 45
+     },
+     "40": {
+      "k": 0,
+      "n": 45
+     },
+     "48": {
+      "k": 0,
+      "n": 45
+     },
+     "56": {
+      "k": 0,
+      "n": 45
+     }
+    }
+   },
+   "none": {
+    "label": "No instruction",
+    "n": 15,
+    "by_k": {
+     "1": {
+      "layers": {
+       "8": {
+        "k": 0,
+        "n": 15,
+        "rate": 0.0,
+        "ci": [
+         0.0,
+         0.20388926630434784
+        ]
+       },
+       "16": {
+        "k": 0,
+        "n": 15,
+        "rate": 0.0,
+        "ci": [
+         0.0,
+         0.20388926630434784
+        ]
+       },
+       "24": {
+        "k": 0,
+        "n": 15,
+        "rate": 0.0,
+        "ci": [
+         0.0,
+         0.20388926630434784
+        ]
+       },
+       "32": {
+        "k": 0,
+        "n": 15,
+        "rate": 0.0,
+        "ci": [
+         0.0,
+         0.20388926630434784
+        ]
+       },
+       "40": {
+        "k": 0,
+        "n": 15,
+        "rate": 0.0,
+        "ci": [
+         0.0,
+         0.20388926630434784
+        ]
+       },
+       "48": {
+        "k": 0,
+        "n": 15,
+        "rate": 0.0,
+        "ci": [
+         0.0,
+         0.20388926630434784
+        ]
+       },
+       "56": {
+        "k": 0,
+        "n": 15,
+        "rate": 0.0,
+        "ci": [
+         0.0,
+         0.20388926630434784
+        ]
+       }
+      },
+      "any_layer": {
+       "k": 0,
+       "n": 15,
+       "rate": 0.0
+      }
+     },
+     "5": {
+      "layers": {
+       "8": {
+        "k": 0,
+        "n": 15,
+        "rate": 0.0,
+        "ci": [
+         0.0,
+         0.20388926630434784
+        ]
+       },
+       "16": {
+        "k": 0,
+        "n": 15,
+        "rate": 0.0,
+        "ci": [
+         0.0,
+         0.20388926630434784
+        ]
+       },
+       "24": {
+        "k": 0,
+        "n": 15,
+        "rate": 0.0,
+        "ci": [
+         0.0,
+         0.20388926630434784
+        ]
+       },
+       "32": {
+        "k": 0,
+        "n": 15,
+        "rate": 0.0,
+        "ci": [
+         0.0,
+         0.20388926630434784
+        ]
+       },
+       "40": {
+        "k": 0,
+        "n": 15,
+        "rate": 0.0,
+        "ci": [
+         0.0,
+         0.20388926630434784
+        ]
+       },
+       "48": {
+        "k": 0,
+        "n": 15,
+        "rate": 0.0,
+        "ci": [
+         0.0,
+         0.20388926630434784
+        ]
+       },
+       "56": {
+        "k": 0,
+        "n": 15,
+        "rate": 0.0,
+        "ci": [
+         0.0,
+         0.20388926630434784
+        ]
+       }
+      },
+      "any_layer": {
+       "k": 0,
+       "n": 15,
+       "rate": 0.0
+      }
+     },
+     "10": {
+      "layers": {
+       "8": {
+        "k": 0,
+        "n": 15,
+        "rate": 0.0,
+        "ci": [
+         0.0,
+         0.20388926630434784
+        ]
+       },
+       "16": {
+        "k": 0,
+        "n": 15,
+        "rate": 0.0,
+        "ci": [
+         0.0,
+         0.20388926630434784
+        ]
+       },
+       "24": {
+        "k": 0,
+        "n": 15,
+        "rate": 0.0,
+        "ci": [
+         0.0,
+         0.20388926630434784
+        ]
+       },
+       "32": {
+        "k": 0,
+        "n": 15,
+        "rate": 0.0,
+        "ci": [
+         0.0,
+         0.20388926630434784
+        ]
+       },
+       "40": {
+        "k": 0,
+        "n": 15,
+        "rate": 0.0,
+        "ci": [
+         0.0,
+         0.20388926630434784
+        ]
+       },
+       "48": {
+        "k": 0,
+        "n": 15,
+        "rate": 0.0,
+        "ci": [
+         0.0,
+         0.20388926630434784
+        ]
+       },
+       "56": {
+        "k": 0,
+        "n": 15,
+        "rate": 0.0,
+        "ci": [
+         0.0,
+         0.20388926630434784
+        ]
+       }
+      },
+      "any_layer": {
+       "k": 0,
+       "n": 15,
+       "rate": 0.0
+      }
+     }
+    },
+    "tracked": {
+     "8": {
+      "k": 0,
+      "n": 15
+     },
+     "16": {
+      "k": 0,
+      "n": 15
+     },
+     "24": {
+      "k": 0,
+      "n": 15
+     },
+     "32": {
+      "k": 0,
+      "n": 15
+     },
+     "40": {
+      "k": 0,
+      "n": 15
+     },
+     "48": {
+      "k": 0,
+      "n": 15
+     },
+     "56": {
+      "k": 0,
+      "n": 15
+     }
+    }
+   }
+  },
+  "invisible_targets": []
+ }
+}

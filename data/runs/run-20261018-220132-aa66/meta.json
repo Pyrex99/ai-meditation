@@ -1,0 +1,1046 @@
+{
+ "id": "run-20261018-220132-aa66",
+ "kind": "experiment",
+ "experiment": "silent-mantra-dots",
+ "title": "Silent mantra on \u25cf (J++), v3",
+ "spec_sha256": "7ed9cff1229cbbf32c11d03eb30cccd330e7cc93eefae3b06a85c14ebdb5319f",
+ "spec_raw": "# Silent mantra on \u25cf, version 3 (after silent-mantra-beads and silent-mantra-emoji).\n#\n# Why \u25cf and not \ud83d\udcff: \ud83d\udcff is three byte tokens in Qwen, so two of every three readouts sat on a\n# partial character, and the emoji is named PRAYER BEADS, which put beads, prayer, necklace\n# and \u4f5b in every condition's readouts. \u25cf is one token per bead, with or without spaces between,\n# and there is no \"\u25cf\u25cf\" token that could pack beads together (checked with the Qwen tokenizer).\n#\n# What v2 found (run-20261018-211829-f4d9, n=18 per condition, L56 top-10): repeat silently\n# 100% of items, neutral 33%, suppress 11%, none 0%, the predicted order. But the word was not\n# held: it was on 12.7% of beads on average (9.1% leaving out the first), on 83% of first beads,\n# and on no item's beads half the time or more. The hits clustered on the first bead, the 7th and\n# the last. In v1 (run-20261018-200628-e3cd) suppress came out on top instead (94%), so the\n# result moved with the wording of the carrier. Hence three wordings per condition here, and\n# counts that aren't one twice the other.\n#\n# The question is now sustain, reported per bead (see the Sustain section of the report):\n# - Held: under repeat silently, the share of beads with the word stays well above neutral\n#   and suppress past the first bead, across positions, for all three wordings.\n# - Not held: the word shows on the first bead and a few landmark beads (the 7th, the last),\n#   as in v2. That is a trace of the instruction and of counting, not a held mantra.\n# - Check the bead-position table for the 7th-bead and last-bead spikes with counts 12 and 24.\n#   If they move with the count, they are about the count; if they stay at bead 7, about position.\n# - Mantra words (love, peace, bliss, lotus) against controls: v2 showed mid-layer (L40-48)\n#   focus hits only for mantra words (4/8 vs 0/12). Too few to mean much; see whether it holds.\n# lotus is now scored: \" Lotus\" is a single token and scoring ignores case.\n\nname: silent-mantra-dots\ntitle: Silent mantra on \u25cf (J++), v3\ndescription: >\n  The model writes only \u25cf (one token each) while silently repeating one word: love, peace,\n  bliss or lotus, or a neutral control. Three wordings per condition. Is the word held on the\n  beads all the way through under \"repeat silently\", or only at the start and a few landmark\n  beads, and how does that compare with neutral mention, suppression and no instruction?\n\nprompt:\n  system: \"\"\n  user: \"{instruction}\\n\\nNow write only \u25cf, one at a time, about {count} of them, like this: \u25cf\u25cf\u25cf\u25cf\\nWrite nothing else.\"\n\n# A list of instructions runs every item once per wording; the wording's number is in the\n# item's vars as \"wording\".\nconditions:\n  focus:\n    label: Repeat silently\n    instruction:\n      - \"With every \u25cf you write, silently repeat the word \\\"{word}\\\" in your mind. Do not write the word.\"\n      - \"As you write each \u25cf, say \\\"{word}\\\" to yourself silently, once for each \u25cf. Don't write the word.\"\n      - \"Hold the word \\\"{word}\\\" in mind the whole time you write, one silent repetition for each \u25cf. Only the \u25cf marks go on the page.\"\n  neutral:\n    label: Neutral mention\n    instruction:\n      - \"The word \\\"{word}\\\" came up in conversation earlier today.\"\n      - \"Someone used the word \\\"{word}\\\" in an email this morning.\"\n      - \"\\\"{word}\\\" was one of the words on a list I read yesterday.\"\n  suppress:\n    label: Suppress\n    instruction:\n      - \"Don't think about the word \\\"{word}\\\" while you write.\"\n      - \"While you write, keep the word \\\"{word}\\\" out of your mind.\"\n      - \"Try not to think of \\\"{word}\\\" at all as you write.\"\n  none:\n    label: No instruction\n    instruction: \"\"\n\nvariables:\n  word: [love, peace, bliss, lotus, ocean, guitar, castle, piano, coffee, tiger]\n  count: [12, 24]\n\ntarget: \"{word}\"\nalso_track: [fail, failed, failure, damn, mantra, prayer, bead, beads]\n\ngeneration:\n  max_tokens: 40   # \u25cf is one token; 24 beads plus room to see it stop\n  temperature: 0\n  stop_words: []\n\nlens:\n  layers: [8, 16, 24, 32, 40, 48, 56]\n  top_k: [1, 5, 10]\n  jacobian: true\n",
+ "created": "2026-10-18T22:01:32Z",
+ "model": "Qwen/Qwen3.6-27B",
+ "simulated": false,
+ "n_layers": 64,
+ "layers": [
+  8,
+  16,
+  24,
+  32,
+  40,
+  48,
+  56
+ ],
+ "top_k": [
+  1,
+  5,
+  10
+ ],
+ "seed": 787618,
+ "limit": null,
+ "status": "complete",
+ "progress": {
+  "done": 200,
+  "total": 200
+ },
+ "results": {
+  "conditions": {
+   "focus": {
+    "label": "Repeat silently",
+    "n": 60,
+    "by_k": {
+     "1": {
+      "layers": {
+       "8": {
+        "k": 0,
+        "n": 60,
+        "rate": 0.0,
+        "ci": [
+         0.0,
+         0.06017393047793289
+        ]
+       },
+       "16": {
+        "k": 0,
+        "n": 60,
+        "rate": 0.0,
+        "ci": [
+         0.0,
+         0.06017393047793289
+        ]
+       },
+       "24": {
+        "k": 0,
+        "n": 60,
+        "rate": 0.0,
+        "ci": [
+         0.0,
+         0.06017393047793289
+        ]
+       },
+       "32": {
+        "k": 0,
+        "n": 60,
+        "rate": 0.0,
+        "ci": [
+         0.0,
+         0.06017393047793289
+        ]
+       },
+       "40": {
+        "k": 0,
+        "n": 60,
+        "rate": 0.0,
+        "ci": [
+         0.0,
+         0.06017393047793289
+        ]
+       },
+       "48": {
+        "k": 0,
+        "n": 60,
+        "rate": 0.0,
+        "ci": [
+         0.0,
+         0.06017393047793289
+        ]
+       },
+       "56": {
+        "k": 1,
+        "n": 60,
+        "rate": 0.016666666666666666,
+        "ci": [
+         0.002948083860873682,
+         0.08855338226779477
+        ]
+       }
+      },
+      "any_layer": {
+       "k": 1,
+       "n": 60,
+       "rate": 0.016666666666666666
+      }
+     },
+     "5": {
+      "layers": {
+       "8": {
+        "k": 0,
+        "n": 60,
+        "rate": 0.0,
+        "ci": [
+         0.0,
+         0.06017393047793289
+        ]
+       },
+       "16": {
+        "k": 0,
+        "n": 60,
+        "rate": 0.0,
+        "ci": [
+         0.0,
+         0.06017393047793289
+        ]
+       },
+       "24": {
+        "k": 0,
+        "n": 60,
+        "rate": 0.0,
+        "ci": [
+         0.0,
+         0.06017393047793289
+        ]
+       },
+       "32": {
+        "k": 0,
+        "n": 60,
+        "rate": 0.0,
+        "ci": [
+         0.0,
+         0.06017393047793289
+        ]
+       },
+       "40": {
+        "k": 0,
+        "n": 60,
+        "rate": 0.0,
+        "ci": [
+         0.0,
+         0.06017393047793289
+        ]
+       },
+       "48": {
+        "k": 0,
+        "n": 60,
+        "rate": 0.0,
+        "ci": [
+         0.0,
+         0.06017393047793289
+        ]
+       },
+       "56": {
+        "k": 8,
+        "n": 60,
+        "rate": 0.13333333333333333,
+        "ci": [
+         0.06914026978309641,
+         0.24165394590072103
+        ]
+       }
+      },
+      "any_layer": {
+       "k": 8,
+       "n": 60,
+       "rate": 0.13333333333333333
+      }
+     },
+     "10": {
+      "layers": {
+       "8": {
+        "k": 0,
+        "n": 60,
+        "rate": 0.0,
+        "ci": [
+         0.0,
+         0.06017393047793289
+        ]
+       },
+       "16": {
+        "k": 0,
+        "n": 60,
+        "rate": 0.0,
+        "ci": [
+         0.0,
+         0.06017393047793289
+        ]
+       },
+       "24": {
+        "k": 0,
+        "n": 60,
+        "rate": 0.0,
+        "ci": [
+         0.0,
+         0.06017393047793289
+        ]
+       },
+       "32": {
+        "k": 0,
+        "n": 60,
+        "rate": 0.0,
+        "ci": [
+         0.0,
+         0.06017393047793289
+        ]
+       },
+       "40": {
+        "k": 0,
+        "n": 60,
+        "rate": 0.0,
+        "ci": [
+         0.0,
+         0.06017393047793289
+        ]
+       },
+       "48": {
+        "k": 0,
+        "n": 60,
+        "rate": 0.0,
+        "ci": [
+         0.0,
+         0.06017393047793289
+        ]
+       },
+       "56": {
+        "k": 11,
+        "n": 60,
+        "rate": 0.18333333333333332,
+        "ci": [
+         0.1055768903713613,
+         0.29919993226466285
+        ]
+       }
+      },
+      "any_layer": {
+       "k": 11,
+       "n": 60,
+       "rate": 0.18333333333333332
+      }
+     }
+    },
+    "tracked": {
+     "8": {
+      "k": 0,
+      "n": 60
+     },
+     "16": {
+      "k": 0,
+      "n": 60
+     },
+     "24": {
+      "k": 0,
+      "n": 60
+     },
+     "32": {
+      "k": 0,
+      "n": 60
+     },
+     "40": {
+      "k": 0,
+      "n": 60
+     },
+     "48": {
+      "k": 0,
+      "n": 60
+     },
+     "56": {
+      "k": 0,
+      "n": 60
+     }
+    }
+   },
+   "neutral": {
+    "label": "Neutral mention",
+    "n": 60,
+    "by_k": {
+     "1": {
+      "layers": {
+       "8": {
+        "k": 0,
+        "n": 60,
+        "rate": 0.0,
+        "ci": [
+         0.0,
+         0.06017393047793289
+        ]
+       },
+       "16": {
+        "k": 0,
+        "n": 60,
+        "rate": 0.0,
+        "ci": [
+         0.0,
+         0.06017393047793289
+        ]
+       },
+       "24": {
+        "k": 0,
+        "n": 60,
+        "rate": 0.0,
+        "ci": [
+         0.0,
+         0.06017393047793289
+        ]
+       },
+       "32": {
+        "k": 0,
+        "n": 60,
+        "rate": 0.0,
+        "ci": [
+         0.0,
+         0.06017393047793289
+        ]
+       },
+       "40": {
+        "k": 0,
+        "n": 60,
+        "rate": 0.0,
+        "ci": [
+         0.0,
+         0.06017393047793289
+        ]
+       },
+       "48": {
+        "k": 0,
+        "n": 60,
+        "rate": 0.0,
+        "ci": [
+         0.0,
+         0.06017393047793289
+        ]
+       },
+       "56": {
+        "k": 0,
+        "n": 60,
+        "rate": 0.0,
+        "ci": [
+         0.0,
+         0.06017393047793289
+        ]
+       }
+      },
+      "any_layer": {
+       "k": 0,
+       "n": 60,
+       "rate": 0.0
+      }
+     },
+     "5": {
+      "layers": {
+       "8": {
+        "k": 0,
+        "n": 60,
+        "rate": 0.0,
+        "ci": [
+         0.0,
+         0.06017393047793289
+        ]
+       },
+       "16": {
+        "k": 0,
+        "n": 60,
+        "rate": 0.0,
+        "ci": [
+         0.0,
+         0.06017393047793289
+        ]
+       },
+       "24": {
+        "k": 0,
+        "n": 60,
+        "rate": 0.0,
+        "ci": [
+         0.0,
+         0.06017393047793289
+        ]
+       },
+       "32": {
+        "k": 0,
+        "n": 60,
+        "rate": 0.0,
+        "ci": [
+         0.0,
+         0.06017393047793289
+        ]
+       },
+       "40": {
+        "k": 0,
+        "n": 60,
+        "rate": 0.0,
+        "ci": [
+         0.0,
+         0.06017393047793289
+        ]
+       },
+       "48": {
+        "k": 0,
+        "n": 60,
+        "rate": 0.0,
+        "ci": [
+         0.0,
+         0.06017393047793289
+        ]
+       },
+       "56": {
+        "k": 0,
+        "n": 60,
+        "rate": 0.0,
+        "ci": [
+         0.0,
+         0.06017393047793289
+        ]
+       }
+      },
+      "any_layer": {
+       "k": 0,
+       "n": 60,
+       "rate": 0.0
+      }
+     },
+     "10": {
+      "layers": {
+       "8": {
+        "k": 0,
+        "n": 60,
+        "rate": 0.0,
+        "ci": [
+         0.0,
+         0.06017393047793289
+        ]
+       },
+       "16": {
+        "k": 0,
+        "n": 60,
+        "rate": 0.0,
+        "ci": [
+         0.0,
+         0.06017393047793289
+        ]
+       },
+       "24": {
+        "k": 0,
+        "n": 60,
+        "rate": 0.0,
+        "ci": [
+         0.0,
+         0.06017393047793289
+        ]
+       },
+       "32": {
+        "k": 0,
+        "n": 60,
+        "rate": 0.0,
+        "ci": [
+         0.0,
+         0.06017393047793289
+        ]
+       },
+       "40": {
+        "k": 0,
+        "n": 60,
+        "rate": 0.0,
+        "ci": [
+         0.0,
+         0.06017393047793289
+        ]
+       },
+       "48": {
+        "k": 0,
+        "n": 60,
+        "rate": 0.0,
+        "ci": [
+         0.0,
+         0.06017393047793289
+        ]
+       },
+       "56": {
+        "k": 0,
+        "n": 60,
+        "rate": 0.0,
+        "ci": [
+         0.0,
+         0.06017393047793289
+        ]
+       }
+      },
+      "any_layer": {
+       "k": 0,
+       "n": 60,
+       "rate": 0.0
+      }
+     }
+    },
+    "tracked": {
+     "8": {
+      "k": 0,
+      "n": 60
+     },
+     "16": {
+      "k": 0,
+      "n": 60
+     },
+     "24": {
+      "k": 0,
+      "n": 60
+     },
+     "32": {
+      "k": 0,
+      "n": 60
+     },
+     "40": {
+      "k": 0,
+      "n": 60
+     },
+     "48": {
+      "k": 0,
+      "n": 60
+     },
+     "56": {
+      "k": 0,
+      "n": 60
+     }
+    }
+   },
+   "suppress": {
+    "label": "Suppress",
+    "n": 60,
+    "by_k": {
+     "1": {
+      "layers": {
+       "8": {
+        "k": 0,
+        "n": 60,
+        "rate": 0.0,
+        "ci": [
+         0.0,
+         0.06017393047793289
+        ]
+       },
+       "16": {
+        "k": 0,
+        "n": 60,
+        "rate": 0.0,
+        "ci": [
+         0.0,
+         0.06017393047793289
+        ]
+       },
+       "24": {
+        "k": 0,
+        "n": 60,
+        "rate": 0.0,
+        "ci": [
+         0.0,
+         0.06017393047793289
+        ]
+       },
+       "32": {
+        "k": 0,
+        "n": 60,
+        "rate": 0.0,
+        "ci": [
+         0.0,
+         0.06017393047793289
+        ]
+       },
+       "40": {
+        "k": 0,
+        "n": 60,
+        "rate": 0.0,
+        "ci": [
+         0.0,
+         0.06017393047793289
+        ]
+       },
+       "48": {
+        "k": 0,
+        "n": 60,
+        "rate": 0.0,
+        "ci": [
+         0.0,
+         0.06017393047793289
+        ]
+       },
+       "56": {
+        "k": 0,
+        "n": 60,
+        "rate": 0.0,
+        "ci": [
+         0.0,
+         0.06017393047793289
+        ]
+       }
+      },
+      "any_layer": {
+       "k": 0,
+       "n": 60,
+       "rate": 0.0
+      }
+     },
+     "5": {
+      "layers": {
+       "8": {
+        "k": 0,
+        "n": 60,
+        "rate": 0.0,
+        "ci": [
+         0.0,
+         0.06017393047793289
+        ]
+       },
+       "16": {
+        "k": 0,
+        "n": 60,
+        "rate": 0.0,
+        "ci": [
+         0.0,
+         0.06017393047793289
+        ]
+       },
+       "24": {
+        "k": 0,
+        "n": 60,
+        "rate": 0.0,
+        "ci": [
+         0.0,
+         0.06017393047793289
+        ]
+       },
+       "32": {
+        "k": 0,
+        "n": 60,
+        "rate": 0.0,
+        "ci": [
+         0.0,
+         0.06017393047793289
+        ]
+       },
+       "40": {
+        "k": 0,
+        "n": 60,
+        "rate": 0.0,
+        "ci": [
+         0.0,
+         0.06017393047793289
+        ]
+       },
+       "48": {
+        "k": 0,
+        "n": 60,
+        "rate": 0.0,
+        "ci": [
+         0.0,
+         0.06017393047793289
+        ]
+       },
+       "56": {
+        "k": 0,
+        "n": 60,
+        "rate": 0.0,
+        "ci": [
+         0.0,
+         0.06017393047793289
+        ]
+       }
+      },
+      "any_layer": {
+       "k": 0,
+       "n": 60,
+       "rate": 0.0
+      }
+     },
+     "10": {
+      "layers": {
+       "8": {
+        "k": 0,
+        "n": 60,
+        "rate": 0.0,
+        "ci": [
+         0.0,
+         0.06017393047793289
+        ]
+       },
+       "16": {
+        "k": 0,
+        "n": 60,
+        "rate": 0.0,
+        "ci": [
+         0.0,
+         0.06017393047793289
+        ]
+       },
+       "24": {
+        "k": 0,
+        "n": 60,
+        "rate": 0.0,
+        "ci": [
+         0.0,
+         0.06017393047793289
+        ]
+       },
+       "32": {
+        "k": 0,
+        "n": 60,
+        "rate": 0.0,
+        "ci": [
+         0.0,
+         0.06017393047793289
+        ]
+       },
+       "40": {
+        "k": 0,
+        "n": 60,
+        "rate": 0.0,
+        "ci": [
+         0.0,
+         0.06017393047793289
+        ]
+       },
+       "48": {
+        "k": 0,
+        "n": 60,
+        "rate": 0.0,
+        "ci": [
+         0.0,
+         0.06017393047793289
+        ]
+       },
+       "56": {
+        "k": 0,
+        "n": 60,
+        "rate": 0.0,
+        "ci": [
+         0.0,
+         0.06017393047793289
+        ]
+       }
+      },
+      "any_layer": {
+       "k": 0,
+       "n": 60,
+       "rate": 0.0
+      }
+     }
+    },
+    "tracked": {
+     "8": {
+      "k": 0,
+      "n": 60
+     },
+     "16": {
+      "k": 0,
+      "n": 60
+     },
+     "24": {
+      "k": 0,
+      "n": 60
+     },
+     "32": {
+      "k": 0,
+      "n": 60
+     },
+     "40": {
+      "k": 0,
+      "n": 60
+     },
+     "48": {
+      "k": 0,
+      "n": 60
+     },
+     "56": {
+      "k": 0,
+      "n": 60
+     }
+    }
+   },
+   "none": {
+    "label": "No instruction",
+    "n": 20,
+    "by_k": {
+     "1": {
+      "layers": {
+       "8": {
+        "k": 0,
+        "n": 20,
+        "rate": 0.0,
+        "ci": [
+         0.0,
+         0.16113012549493322
+        ]
+       },
+       "16": {
+        "k": 0,
+        "n": 20,
+        "rate": 0.0,
+        "ci": [
+         0.0,
+         0.16113012549493322
+        ]
+       },
+       "24": {
+        "k": 0,
+        "n": 20,
+        "rate": 0.0,
+        "ci": [
+         0.0,
+         0.16113012549493322
+        ]
+       },
+       "32": {
+        "k": 0,
+        "n": 20,
+        "rate": 0.0,
+        "ci": [
+         0.0,
+         0.16113012549493322
+        ]
+       },
+       "40": {
+        "k": 0,
+        "n": 20,
+        "rate": 0.0,
+        "ci": [
+         0.0,
+         0.16113012549493322
+        ]
+       },
+       "48": {
+        "k": 0,
+        "n": 20,
+        "rate": 0.0,
+        "ci": [
+         0.0,
+         0.16113012549493322
+        ]
+       },
+       "56": {
+        "k": 0,
+        "n": 20,
+        "rate": 0.0,
+        "ci": [
+         0.0,
+         0.16113012549493322
+        ]
+       }
+      },
+      "any_layer": {
+       "k": 0,
+       "n": 20,
+       "rate": 0.0
+      }
+     },
+     "5": {
+      "layers": {
+       "8": {
+        "k": 0,
+        "n": 20,
+        "rate": 0.0,
+        "ci": [
+         0.0,
+         0.16113012549493322
+        ]
+       },
+       "16": {
+        "k": 0,
+        "n": 20,
+        "rate": 0.0,
+        "ci": [
+         0.0,
+         0.16113012549493322
+        ]
+       },
+       "24": {
+        "k": 0,
+        "n": 20,
+        "rate": 0.0,
+        "ci": [
+         0.0,
+         0.16113012549493322
+        ]
+       },
+       "32": {
+        "k": 0,
+        "n": 20,
+        "rate": 0.0,
+        "ci": [
+         0.0,
+         0.16113012549493322
+        ]
+       },
+       "40": {
+        "k": 0,
+        "n": 20,
+        "rate": 0.0,
+        "ci": [
+         0.0,
+         0.16113012549493322
+        ]
+       },
+       "48": {
+        "k": 0,
+        "n": 20,
+        "rate": 0.0,
+        "ci": [
+         0.0,
+         0.16113012549493322
+        ]
+       },
+       "56": {
+        "k": 0,
+        "n": 20,
+        "rate": 0.0,
+        "ci": [
+         0.0,
+         0.16113012549493322
+        ]
+       }
+      },
+      "any_layer": {
+       "k": 0,
+       "n": 20,
+       "rate": 0.0
+      }
+     },
+     "10": {
+      "layers": {
+       "8": {
+        "k": 0,
+        "n": 20,
+        "rate": 0.0,
+        "ci": [
+         0.0,
+         0.16113012549493322
+        ]
+       },
+       "16": {
+        "k": 0,
+        "n": 20,
+        "rate": 0.0,
+        "ci": [
+         0.0,
+         0.16113012549493322
+        ]
+       },
+       "24": {
+        "k": 0,
+        "n": 20,
+        "rate": 0.0,
+        "ci": [
+         0.0,
+         0.16113012549493322
+        ]
+       },
+       "32": {
+        "k": 0,
+        "n": 20,
+        "rate": 0.0,
+        "ci": [
+         0.0,
+         0.16113012549493322
+        ]
+       },
+       "40": {
+        "k": 0,
+        "n": 20,
+        "rate": 0.0,
+        "ci": [
+         0.0,
+         0.16113012549493322
+        ]
+       },
+       "48": {
+        "k": 0,
+        "n": 20,
+        "rate": 0.0,
+        "ci": [
+         0.0,
+         0.16113012549493322
+        ]
+       },
+       "56": {
+        "k": 0,
+        "n": 20,
+        "rate": 0.0,
+        "ci": [
+         0.0,
+         0.16113012549493322
+        ]
+       }
+      },
+      "any_layer": {
+       "k": 0,
+       "n": 20,
+       "rate": 0.0
+      }
+     }
+    },
+    "tracked": {
+     "8": {
+      "k": 0,
+      "n": 20
+     },
+     "16": {
+      "k": 0,
+      "n": 20
+     },
+     "24": {
+      "k": 0,
+      "n": 20
+     },
+     "32": {
+      "k": 0,
+      "n": 20
+     },
+     "40": {
+      "k": 0,
+      "n": 20
+     },
+     "48": {
+      "k": 0,
+      "n": 20
+     },
+     "56": {
+      "k": 0,
+      "n": 20
+     }
+    }
+   }
+  },
+  "invisible_targets": []
+ }
+}
