@@ -57,20 +57,30 @@ The lens stack replicates.
 So open-loop instruction doesn't hold a word through a long output. That is part of why the
 lens-feedback loop is next.
 
-**Self-steering loop (built 2026-11-02, not run on the model).** `lab/loop.py`, `kind: loop`:
-several rounds of the same task, and between rounds the model gets its own lens readout, a
-yoked readout from another attempt, its score only, or nothing. Specs:
-`experiments/self-steer-focus.yaml`, `experiments/self-steer-hidden-answer.yaml`. Hypotheses
-and running order are in `docs/SCOPE.md`. Tested on the simulated engine only.
+**Self-steering loop.** `lab/loop.py`, `kind: loop`: several rounds of the same kind of task;
+between rounds the model gets its own lens readout, a yoked readout from another attempt, its
+score only, or nothing. Hypotheses and running order: `docs/SCOPE.md`.
+
+**run-20261102-203853-c7ae, self-steer-focus v1 pilot (20 items, 180 transcripts × 4 rounds).**
+Pod ran 11 minutes (about $0.75); the run itself took 2.5 minutes. Outputs clean: 100% copied,
+0 leaks, round 1 identical across arms in 58 of 60 items. But the design couldn't test H1: the
+concept faded over rounds in every arm (focus L56 36% → 7-14%), suppress sat at the floor
+(3.6% → 0), and L40 (meant to be held out) was about 1%. Replaced by
+`experiments/self-steer-focus-v2.yaml` (fresh sentence each round, provoked suppress, show L56
+and hold out L48). Details in SCOPE.md, Changes.
 
 ## Next steps
 
-1. Pilot `self-steer-focus` on the GPU: `python -m lab.cli run self-steer-focus --engine interp
-   --limit 20` (720 generations). Check copied/leaked rates and read a few transcripts.
-2. Full `self-steer-focus`; test H1a-e in `docs/SCOPE.md` and fill in its Status column.
+1. Pilot `self-steer-focus-v2`: `python -m lab.cli run self-steer-focus-v2 --engine interp
+   --limit 12` (480 generations). Check copied/leaked, that focus no longer fades in the blind
+   arm, and that provoked is well above 0 at L56 and L48 (room to push down).
+2. If those pass, the full v2 run (2880 generations, likely under 20 GPU minutes). Test H1a-e.
 3. Pilot `self-steer-hidden-answer`; check the `direct` ceiling before reading H2.
 4. Build the held-out instrument (concept-vector projection over copied tokens) if H1 is positive.
 5. Older threads, paused: the naming-vs-avoiding ablation (J++ Figure 7), the mala sit.
+
+GPU note: pods in US-CA-2 were unavailable for about 6 minutes before one started. A retry loop
+(one try a minute) got one at 20:30. The engine took 8 minutes from pod start to ready.
 
 ## Open product notes
 

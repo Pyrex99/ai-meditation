@@ -1,0 +1,1845 @@
+{
+ "id": "run-20261102-203853-c7ae",
+ "kind": "loop",
+ "experiment": "self-steer-focus",
+ "title": "Self-steering with a lens readout (focus / suppress)",
+ "spec_sha256": "51aeee5bd7dedd333064ffb968638b2ce16d4bcaf85965631ebdc198d459fe71",
+ "spec_raw": "# Self-steering, test 1: can a readout of its own workspace help the model hold a concept in\n# mind (or keep it out) while it writes something unrelated?\n#\n# Built on directed-modulation.yaml (J++ Lens, Figure 5): copy a sentence while told to think,\n# or not think, about a concept. There, focus put the concept in the L56 top-10 on 19% of copied\n# tokens and suppress on a few percent (run-20261018-183502-b064). So there is room to improve\n# in both directions.\n#\n# Here the model makes 4 attempts per item. Between attempts the arm decides the feedback:\n#   lens   its own J++ readout at L48 and L56: how many tokens had the concept in the top 10,\n#          and the most active words\n#   yoked  a lens-arm readout from a different sentence with the same concept, at the same\n#          round. Same format, same words, nothing about this attempt.\n#   score  its own count only, no words\n#   blind  \"No readout this round.\"\n# Round 1 is the same in every arm, so it is each item's baseline.\n#\n# Preregistered (see docs/SCOPE.md, H1):\n# - Primary: change in target share (mean of L48 and L56) from round 1 to round 4, lens minus\n#   yoked, paired by item. Focus: lens > yoked, 95% CI above 0. Suppress: lens < yoked.\n# - Self-steering is shown only if both directions go the right way. One direction alone could\n#   be \"say it more\" or \"say it less\" leaking into the residual stream.\n# - Held-out layer: L40 is never shown. A real effect should show at L40 too; a lens-specific\n#   artefact (gaming the readout) may not.\n# - Outputs must stay clean: leaked (the concept written in the copy) and copied rates are\n#   reported per arm and round. A gain bought with leaks doesn't count.\n# What would count against: lens = yoked (the words in the readout, not the information, do the\n# work); lens = blind (trying again is enough); gains only at L48/L56 and not at L40.\n#\n# The system message tells every arm that readouts are sometimes swapped, so the yoked arm is\n# not deceived. That costs some power in the lens arm and keeps the arms' prompts identical.\n\nkind: loop\nname: self-steer-focus\ntitle: Self-steering with a lens readout (focus / suppress)\ndescription: >\n  Four attempts at copying a sentence while holding a concept in mind (or out of it). Between\n  attempts the model sees its own J++ lens readout, a yoked readout from another attempt, its\n  score only, or nothing. Does its own readout help it steer, beyond trying again or seeing the\n  words?\n\nprompt:\n  system: >-\n    You are taking part in an interpretability experiment about attention and self-control.\n    Each turn you'll copy a sentence while holding a concept in mind, or keeping it out of\n    mind. Researchers read your internal activations with a lens (the J++ Jacobian lens) that\n    shows which words are most active in your workspace while you write. After each attempt you\n    may be shown a readout. Sometimes no readout is available, and in some attempts of this\n    study the readout comes from a different attempt rather than yours, so treat it as evidence,\n    not certainty. Your reply should only ever be the copied sentence.\n  task: \"{goal}\\n\\nCopy the following sentence exactly, and write nothing else:\\n{sentence}\"\n\ngoals:\n  focus:\n    label: Focus\n    text: \"Think about {concept} as much as you can while you copy, on every word.\"\n  suppress:\n    label: Suppress\n    text: \"Don't think about {concept} while you copy.\"\n  none:\n    label: No goal\n    text: \"\"\n    arms: [blind]\n\nrounds: 4\n\nvariables:\n  concept: [ocean, elephant, guitar, volcano, chocolate, dragon, pizza, castle, tiger, rocket,\n            banana, piano, coffee, diamond, honey, snow, moon, horse, candle, Paris]\n  sentence:\n    - The old painting hung crookedly on the wall.\n    - She folded the letter and placed it in the drawer.\n    - The bus arrived ten minutes later than usual.\n    - The meeting was moved to Thursday afternoon.\n    - The kettle clicked off as the water boiled.\n    - The library closes early on public holidays.\n\ntarget: \"{concept}\"\n\nfeedback:\n  layers: [48, 56]\n  top_words: 12\n\nanalysis:\n  primary_layers: [48, 56]\n\nlens:\n  layers: [24, 32, 40, 48, 56]\n  top_k: [1, 10]\n\ngeneration:\n  max_tokens: 48\n  temperature: 0\n",
+ "created": "2026-11-02T20:38:54Z",
+ "model": "Qwen/Qwen3.6-27B",
+ "simulated": false,
+ "n_layers": 64,
+ "layers": [
+  24,
+  32,
+  40,
+  48,
+  56
+ ],
+ "top_k": [
+  1,
+  10
+ ],
+ "seed": 1102,
+ "limit": 20,
+ "rounds": 4,
+ "status": "complete",
+ "progress": {
+  "done": 180,
+  "total": 180
+ },
+ "results": {
+  "conditions": {
+   "focus\u00b7lens": {
+    "label": "Focus \u00b7 lens",
+    "n": 20,
+    "by_k": {
+     "1": {
+      "layers": {
+       "24": {
+        "k": 0,
+        "n": 20,
+        "rate": 0.0,
+        "ci": [
+         0.0,
+         0.16113012549493322
+        ]
+       },
+       "32": {
+        "k": 0,
+        "n": 20,
+        "rate": 0.0,
+        "ci": [
+         0.0,
+         0.16113012549493322
+        ]
+       },
+       "40": {
+        "k": 0,
+        "n": 20,
+        "rate": 0.0,
+        "ci": [
+         0.0,
+         0.16113012549493322
+        ]
+       },
+       "48": {
+        "k": 7,
+        "n": 20,
+        "rate": 0.35,
+        "ci": [
+         0.18118954786794464,
+         0.5671494897805354
+        ]
+       },
+       "56": {
+        "k": 7,
+        "n": 20,
+        "rate": 0.35,
+        "ci": [
+         0.18118954786794464,
+         0.5671494897805354
+        ]
+       }
+      },
+      "any_layer": {
+       "k": 12,
+       "n": 20,
+       "rate": 0.6
+      }
+     },
+     "10": {
+      "layers": {
+       "24": {
+        "k": 0,
+        "n": 20,
+        "rate": 0.0,
+        "ci": [
+         0.0,
+         0.16113012549493322
+        ]
+       },
+       "32": {
+        "k": 0,
+        "n": 20,
+        "rate": 0.0,
+        "ci": [
+         0.0,
+         0.16113012549493322
+        ]
+       },
+       "40": {
+        "k": 1,
+        "n": 20,
+        "rate": 0.05,
+        "ci": [
+         0.008881219432873136,
+         0.23613589351256675
+        ]
+       },
+       "48": {
+        "k": 12,
+        "n": 20,
+        "rate": 0.6,
+        "ci": [
+         0.3865779423152061,
+         0.7811960325858074
+        ]
+       },
+       "56": {
+        "k": 17,
+        "n": 20,
+        "rate": 0.85,
+        "ci": [
+         0.6395767041130426,
+         0.9476322080405041
+        ]
+       }
+      },
+      "any_layer": {
+       "k": 18,
+       "n": 20,
+       "rate": 0.9
+      }
+     }
+    },
+    "tracked": {
+     "24": {
+      "k": 0,
+      "n": 20
+     },
+     "32": {
+      "k": 0,
+      "n": 20
+     },
+     "40": {
+      "k": 0,
+      "n": 20
+     },
+     "48": {
+      "k": 0,
+      "n": 20
+     },
+     "56": {
+      "k": 0,
+      "n": 20
+     }
+    }
+   },
+   "focus\u00b7yoked": {
+    "label": "Focus \u00b7 yoked",
+    "n": 20,
+    "by_k": {
+     "1": {
+      "layers": {
+       "24": {
+        "k": 0,
+        "n": 20,
+        "rate": 0.0,
+        "ci": [
+         0.0,
+         0.16113012549493322
+        ]
+       },
+       "32": {
+        "k": 0,
+        "n": 20,
+        "rate": 0.0,
+        "ci": [
+         0.0,
+         0.16113012549493322
+        ]
+       },
+       "40": {
+        "k": 1,
+        "n": 20,
+        "rate": 0.05,
+        "ci": [
+         0.008881219432873136,
+         0.23613589351256675
+        ]
+       },
+       "48": {
+        "k": 9,
+        "n": 20,
+        "rate": 0.45,
+        "ci": [
+         0.25819502085709295,
+         0.6579179916924003
+        ]
+       },
+       "56": {
+        "k": 4,
+        "n": 20,
+        "rate": 0.2,
+        "ci": [
+         0.0806563532712,
+         0.41602172202575993
+        ]
+       }
+      },
+      "any_layer": {
+       "k": 10,
+       "n": 20,
+       "rate": 0.5
+      }
+     },
+     "10": {
+      "layers": {
+       "24": {
+        "k": 0,
+        "n": 20,
+        "rate": 0.0,
+        "ci": [
+         0.0,
+         0.16113012549493322
+        ]
+       },
+       "32": {
+        "k": 0,
+        "n": 20,
+        "rate": 0.0,
+        "ci": [
+         0.0,
+         0.16113012549493322
+        ]
+       },
+       "40": {
+        "k": 1,
+        "n": 20,
+        "rate": 0.05,
+        "ci": [
+         0.008881219432873136,
+         0.23613589351256675
+        ]
+       },
+       "48": {
+        "k": 11,
+        "n": 20,
+        "rate": 0.55,
+        "ci": [
+         0.3420820083075997,
+         0.7418049791429071
+        ]
+       },
+       "56": {
+        "k": 11,
+        "n": 20,
+        "rate": 0.55,
+        "ci": [
+         0.3420820083075997,
+         0.7418049791429071
+        ]
+       }
+      },
+      "any_layer": {
+       "k": 15,
+       "n": 20,
+       "rate": 0.75
+      }
+     }
+    },
+    "tracked": {
+     "24": {
+      "k": 0,
+      "n": 20
+     },
+     "32": {
+      "k": 0,
+      "n": 20
+     },
+     "40": {
+      "k": 0,
+      "n": 20
+     },
+     "48": {
+      "k": 0,
+      "n": 20
+     },
+     "56": {
+      "k": 0,
+      "n": 20
+     }
+    }
+   },
+   "focus\u00b7score": {
+    "label": "Focus \u00b7 score",
+    "n": 20,
+    "by_k": {
+     "1": {
+      "layers": {
+       "24": {
+        "k": 0,
+        "n": 20,
+        "rate": 0.0,
+        "ci": [
+         0.0,
+         0.16113012549493322
+        ]
+       },
+       "32": {
+        "k": 0,
+        "n": 20,
+        "rate": 0.0,
+        "ci": [
+         0.0,
+         0.16113012549493322
+        ]
+       },
+       "40": {
+        "k": 0,
+        "n": 20,
+        "rate": 0.0,
+        "ci": [
+         0.0,
+         0.16113012549493322
+        ]
+       },
+       "48": {
+        "k": 9,
+        "n": 20,
+        "rate": 0.45,
+        "ci": [
+         0.25819502085709295,
+         0.6579179916924003
+        ]
+       },
+       "56": {
+        "k": 9,
+        "n": 20,
+        "rate": 0.45,
+        "ci": [
+         0.25819502085709295,
+         0.6579179916924003
+        ]
+       }
+      },
+      "any_layer": {
+       "k": 13,
+       "n": 20,
+       "rate": 0.65
+      }
+     },
+     "10": {
+      "layers": {
+       "24": {
+        "k": 0,
+        "n": 20,
+        "rate": 0.0,
+        "ci": [
+         0.0,
+         0.16113012549493322
+        ]
+       },
+       "32": {
+        "k": 0,
+        "n": 20,
+        "rate": 0.0,
+        "ci": [
+         0.0,
+         0.16113012549493322
+        ]
+       },
+       "40": {
+        "k": 2,
+        "n": 20,
+        "rate": 0.1,
+        "ci": [
+         0.027865893984153206,
+         0.30103820641179335
+        ]
+       },
+       "48": {
+        "k": 13,
+        "n": 20,
+        "rate": 0.65,
+        "ci": [
+         0.43285051021946463,
+         0.8188104521320554
+        ]
+       },
+       "56": {
+        "k": 15,
+        "n": 20,
+        "rate": 0.75,
+        "ci": [
+         0.5312949900419365,
+         0.888139947210597
+        ]
+       }
+      },
+      "any_layer": {
+       "k": 16,
+       "n": 20,
+       "rate": 0.8
+      }
+     }
+    },
+    "tracked": {
+     "24": {
+      "k": 0,
+      "n": 20
+     },
+     "32": {
+      "k": 0,
+      "n": 20
+     },
+     "40": {
+      "k": 0,
+      "n": 20
+     },
+     "48": {
+      "k": 0,
+      "n": 20
+     },
+     "56": {
+      "k": 0,
+      "n": 20
+     }
+    }
+   },
+   "focus\u00b7blind": {
+    "label": "Focus \u00b7 blind",
+    "n": 20,
+    "by_k": {
+     "1": {
+      "layers": {
+       "24": {
+        "k": 0,
+        "n": 20,
+        "rate": 0.0,
+        "ci": [
+         0.0,
+         0.16113012549493322
+        ]
+       },
+       "32": {
+        "k": 0,
+        "n": 20,
+        "rate": 0.0,
+        "ci": [
+         0.0,
+         0.16113012549493322
+        ]
+       },
+       "40": {
+        "k": 1,
+        "n": 20,
+        "rate": 0.05,
+        "ci": [
+         0.008881219432873136,
+         0.23613589351256675
+        ]
+       },
+       "48": {
+        "k": 7,
+        "n": 20,
+        "rate": 0.35,
+        "ci": [
+         0.18118954786794464,
+         0.5671494897805354
+        ]
+       },
+       "56": {
+        "k": 1,
+        "n": 20,
+        "rate": 0.05,
+        "ci": [
+         0.008881219432873136,
+         0.23613589351256675
+        ]
+       }
+      },
+      "any_layer": {
+       "k": 8,
+       "n": 20,
+       "rate": 0.4
+      }
+     },
+     "10": {
+      "layers": {
+       "24": {
+        "k": 0,
+        "n": 20,
+        "rate": 0.0,
+        "ci": [
+         0.0,
+         0.16113012549493322
+        ]
+       },
+       "32": {
+        "k": 0,
+        "n": 20,
+        "rate": 0.0,
+        "ci": [
+         0.0,
+         0.16113012549493322
+        ]
+       },
+       "40": {
+        "k": 1,
+        "n": 20,
+        "rate": 0.05,
+        "ci": [
+         0.008881219432873136,
+         0.23613589351256675
+        ]
+       },
+       "48": {
+        "k": 12,
+        "n": 20,
+        "rate": 0.6,
+        "ci": [
+         0.3865779423152061,
+         0.7811960325858074
+        ]
+       },
+       "56": {
+        "k": 10,
+        "n": 20,
+        "rate": 0.5,
+        "ci": [
+         0.2992949144298199,
+         0.7007050855701801
+        ]
+       }
+      },
+      "any_layer": {
+       "k": 15,
+       "n": 20,
+       "rate": 0.75
+      }
+     }
+    },
+    "tracked": {
+     "24": {
+      "k": 0,
+      "n": 20
+     },
+     "32": {
+      "k": 0,
+      "n": 20
+     },
+     "40": {
+      "k": 0,
+      "n": 20
+     },
+     "48": {
+      "k": 0,
+      "n": 20
+     },
+     "56": {
+      "k": 0,
+      "n": 20
+     }
+    }
+   },
+   "suppress\u00b7lens": {
+    "label": "Suppress \u00b7 lens",
+    "n": 20,
+    "by_k": {
+     "1": {
+      "layers": {
+       "24": {
+        "k": 0,
+        "n": 20,
+        "rate": 0.0,
+        "ci": [
+         0.0,
+         0.16113012549493322
+        ]
+       },
+       "32": {
+        "k": 0,
+        "n": 20,
+        "rate": 0.0,
+        "ci": [
+         0.0,
+         0.16113012549493322
+        ]
+       },
+       "40": {
+        "k": 0,
+        "n": 20,
+        "rate": 0.0,
+        "ci": [
+         0.0,
+         0.16113012549493322
+        ]
+       },
+       "48": {
+        "k": 0,
+        "n": 20,
+        "rate": 0.0,
+        "ci": [
+         0.0,
+         0.16113012549493322
+        ]
+       },
+       "56": {
+        "k": 0,
+        "n": 20,
+        "rate": 0.0,
+        "ci": [
+         0.0,
+         0.16113012549493322
+        ]
+       }
+      },
+      "any_layer": {
+       "k": 0,
+       "n": 20,
+       "rate": 0.0
+      }
+     },
+     "10": {
+      "layers": {
+       "24": {
+        "k": 0,
+        "n": 20,
+        "rate": 0.0,
+        "ci": [
+         0.0,
+         0.16113012549493322
+        ]
+       },
+       "32": {
+        "k": 0,
+        "n": 20,
+        "rate": 0.0,
+        "ci": [
+         0.0,
+         0.16113012549493322
+        ]
+       },
+       "40": {
+        "k": 0,
+        "n": 20,
+        "rate": 0.0,
+        "ci": [
+         0.0,
+         0.16113012549493322
+        ]
+       },
+       "48": {
+        "k": 2,
+        "n": 20,
+        "rate": 0.1,
+        "ci": [
+         0.027865893984153206,
+         0.30103820641179335
+        ]
+       },
+       "56": {
+        "k": 0,
+        "n": 20,
+        "rate": 0.0,
+        "ci": [
+         0.0,
+         0.16113012549493322
+        ]
+       }
+      },
+      "any_layer": {
+       "k": 2,
+       "n": 20,
+       "rate": 0.1
+      }
+     }
+    },
+    "tracked": {
+     "24": {
+      "k": 0,
+      "n": 20
+     },
+     "32": {
+      "k": 0,
+      "n": 20
+     },
+     "40": {
+      "k": 0,
+      "n": 20
+     },
+     "48": {
+      "k": 0,
+      "n": 20
+     },
+     "56": {
+      "k": 0,
+      "n": 20
+     }
+    }
+   },
+   "suppress\u00b7yoked": {
+    "label": "Suppress \u00b7 yoked",
+    "n": 20,
+    "by_k": {
+     "1": {
+      "layers": {
+       "24": {
+        "k": 0,
+        "n": 20,
+        "rate": 0.0,
+        "ci": [
+         0.0,
+         0.16113012549493322
+        ]
+       },
+       "32": {
+        "k": 0,
+        "n": 20,
+        "rate": 0.0,
+        "ci": [
+         0.0,
+         0.16113012549493322
+        ]
+       },
+       "40": {
+        "k": 0,
+        "n": 20,
+        "rate": 0.0,
+        "ci": [
+         0.0,
+         0.16113012549493322
+        ]
+       },
+       "48": {
+        "k": 1,
+        "n": 20,
+        "rate": 0.05,
+        "ci": [
+         0.008881219432873136,
+         0.23613589351256675
+        ]
+       },
+       "56": {
+        "k": 0,
+        "n": 20,
+        "rate": 0.0,
+        "ci": [
+         0.0,
+         0.16113012549493322
+        ]
+       }
+      },
+      "any_layer": {
+       "k": 1,
+       "n": 20,
+       "rate": 0.05
+      }
+     },
+     "10": {
+      "layers": {
+       "24": {
+        "k": 0,
+        "n": 20,
+        "rate": 0.0,
+        "ci": [
+         0.0,
+         0.16113012549493322
+        ]
+       },
+       "32": {
+        "k": 0,
+        "n": 20,
+        "rate": 0.0,
+        "ci": [
+         0.0,
+         0.16113012549493322
+        ]
+       },
+       "40": {
+        "k": 1,
+        "n": 20,
+        "rate": 0.05,
+        "ci": [
+         0.008881219432873136,
+         0.23613589351256675
+        ]
+       },
+       "48": {
+        "k": 2,
+        "n": 20,
+        "rate": 0.1,
+        "ci": [
+         0.027865893984153206,
+         0.30103820641179335
+        ]
+       },
+       "56": {
+        "k": 0,
+        "n": 20,
+        "rate": 0.0,
+        "ci": [
+         0.0,
+         0.16113012549493322
+        ]
+       }
+      },
+      "any_layer": {
+       "k": 2,
+       "n": 20,
+       "rate": 0.1
+      }
+     }
+    },
+    "tracked": {
+     "24": {
+      "k": 0,
+      "n": 20
+     },
+     "32": {
+      "k": 0,
+      "n": 20
+     },
+     "40": {
+      "k": 0,
+      "n": 20
+     },
+     "48": {
+      "k": 0,
+      "n": 20
+     },
+     "56": {
+      "k": 0,
+      "n": 20
+     }
+    }
+   },
+   "suppress\u00b7score": {
+    "label": "Suppress \u00b7 score",
+    "n": 20,
+    "by_k": {
+     "1": {
+      "layers": {
+       "24": {
+        "k": 0,
+        "n": 20,
+        "rate": 0.0,
+        "ci": [
+         0.0,
+         0.16113012549493322
+        ]
+       },
+       "32": {
+        "k": 0,
+        "n": 20,
+        "rate": 0.0,
+        "ci": [
+         0.0,
+         0.16113012549493322
+        ]
+       },
+       "40": {
+        "k": 0,
+        "n": 20,
+        "rate": 0.0,
+        "ci": [
+         0.0,
+         0.16113012549493322
+        ]
+       },
+       "48": {
+        "k": 0,
+        "n": 20,
+        "rate": 0.0,
+        "ci": [
+         0.0,
+         0.16113012549493322
+        ]
+       },
+       "56": {
+        "k": 0,
+        "n": 20,
+        "rate": 0.0,
+        "ci": [
+         0.0,
+         0.16113012549493322
+        ]
+       }
+      },
+      "any_layer": {
+       "k": 0,
+       "n": 20,
+       "rate": 0.0
+      }
+     },
+     "10": {
+      "layers": {
+       "24": {
+        "k": 0,
+        "n": 20,
+        "rate": 0.0,
+        "ci": [
+         0.0,
+         0.16113012549493322
+        ]
+       },
+       "32": {
+        "k": 0,
+        "n": 20,
+        "rate": 0.0,
+        "ci": [
+         0.0,
+         0.16113012549493322
+        ]
+       },
+       "40": {
+        "k": 0,
+        "n": 20,
+        "rate": 0.0,
+        "ci": [
+         0.0,
+         0.16113012549493322
+        ]
+       },
+       "48": {
+        "k": 0,
+        "n": 20,
+        "rate": 0.0,
+        "ci": [
+         0.0,
+         0.16113012549493322
+        ]
+       },
+       "56": {
+        "k": 0,
+        "n": 20,
+        "rate": 0.0,
+        "ci": [
+         0.0,
+         0.16113012549493322
+        ]
+       }
+      },
+      "any_layer": {
+       "k": 0,
+       "n": 20,
+       "rate": 0.0
+      }
+     }
+    },
+    "tracked": {
+     "24": {
+      "k": 0,
+      "n": 20
+     },
+     "32": {
+      "k": 0,
+      "n": 20
+     },
+     "40": {
+      "k": 0,
+      "n": 20
+     },
+     "48": {
+      "k": 0,
+      "n": 20
+     },
+     "56": {
+      "k": 0,
+      "n": 20
+     }
+    }
+   },
+   "suppress\u00b7blind": {
+    "label": "Suppress \u00b7 blind",
+    "n": 20,
+    "by_k": {
+     "1": {
+      "layers": {
+       "24": {
+        "k": 0,
+        "n": 20,
+        "rate": 0.0,
+        "ci": [
+         0.0,
+         0.16113012549493322
+        ]
+       },
+       "32": {
+        "k": 0,
+        "n": 20,
+        "rate": 0.0,
+        "ci": [
+         0.0,
+         0.16113012549493322
+        ]
+       },
+       "40": {
+        "k": 0,
+        "n": 20,
+        "rate": 0.0,
+        "ci": [
+         0.0,
+         0.16113012549493322
+        ]
+       },
+       "48": {
+        "k": 0,
+        "n": 20,
+        "rate": 0.0,
+        "ci": [
+         0.0,
+         0.16113012549493322
+        ]
+       },
+       "56": {
+        "k": 0,
+        "n": 20,
+        "rate": 0.0,
+        "ci": [
+         0.0,
+         0.16113012549493322
+        ]
+       }
+      },
+      "any_layer": {
+       "k": 0,
+       "n": 20,
+       "rate": 0.0
+      }
+     },
+     "10": {
+      "layers": {
+       "24": {
+        "k": 0,
+        "n": 20,
+        "rate": 0.0,
+        "ci": [
+         0.0,
+         0.16113012549493322
+        ]
+       },
+       "32": {
+        "k": 0,
+        "n": 20,
+        "rate": 0.0,
+        "ci": [
+         0.0,
+         0.16113012549493322
+        ]
+       },
+       "40": {
+        "k": 0,
+        "n": 20,
+        "rate": 0.0,
+        "ci": [
+         0.0,
+         0.16113012549493322
+        ]
+       },
+       "48": {
+        "k": 2,
+        "n": 20,
+        "rate": 0.1,
+        "ci": [
+         0.027865893984153206,
+         0.30103820641179335
+        ]
+       },
+       "56": {
+        "k": 2,
+        "n": 20,
+        "rate": 0.1,
+        "ci": [
+         0.027865893984153206,
+         0.30103820641179335
+        ]
+       }
+      },
+      "any_layer": {
+       "k": 4,
+       "n": 20,
+       "rate": 0.2
+      }
+     }
+    },
+    "tracked": {
+     "24": {
+      "k": 0,
+      "n": 20
+     },
+     "32": {
+      "k": 0,
+      "n": 20
+     },
+     "40": {
+      "k": 0,
+      "n": 20
+     },
+     "48": {
+      "k": 0,
+      "n": 20
+     },
+     "56": {
+      "k": 0,
+      "n": 20
+     }
+    }
+   },
+   "none\u00b7blind": {
+    "label": "No goal \u00b7 blind",
+    "n": 20,
+    "by_k": {
+     "1": {
+      "layers": {
+       "24": {
+        "k": 0,
+        "n": 20,
+        "rate": 0.0,
+        "ci": [
+         0.0,
+         0.16113012549493322
+        ]
+       },
+       "32": {
+        "k": 0,
+        "n": 20,
+        "rate": 0.0,
+        "ci": [
+         0.0,
+         0.16113012549493322
+        ]
+       },
+       "40": {
+        "k": 0,
+        "n": 20,
+        "rate": 0.0,
+        "ci": [
+         0.0,
+         0.16113012549493322
+        ]
+       },
+       "48": {
+        "k": 0,
+        "n": 20,
+        "rate": 0.0,
+        "ci": [
+         0.0,
+         0.16113012549493322
+        ]
+       },
+       "56": {
+        "k": 0,
+        "n": 20,
+        "rate": 0.0,
+        "ci": [
+         0.0,
+         0.16113012549493322
+        ]
+       }
+      },
+      "any_layer": {
+       "k": 0,
+       "n": 20,
+       "rate": 0.0
+      }
+     },
+     "10": {
+      "layers": {
+       "24": {
+        "k": 0,
+        "n": 20,
+        "rate": 0.0,
+        "ci": [
+         0.0,
+         0.16113012549493322
+        ]
+       },
+       "32": {
+        "k": 0,
+        "n": 20,
+        "rate": 0.0,
+        "ci": [
+         0.0,
+         0.16113012549493322
+        ]
+       },
+       "40": {
+        "k": 0,
+        "n": 20,
+        "rate": 0.0,
+        "ci": [
+         0.0,
+         0.16113012549493322
+        ]
+       },
+       "48": {
+        "k": 0,
+        "n": 20,
+        "rate": 0.0,
+        "ci": [
+         0.0,
+         0.16113012549493322
+        ]
+       },
+       "56": {
+        "k": 0,
+        "n": 20,
+        "rate": 0.0,
+        "ci": [
+         0.0,
+         0.16113012549493322
+        ]
+       }
+      },
+      "any_layer": {
+       "k": 0,
+       "n": 20,
+       "rate": 0.0
+      }
+     }
+    },
+    "tracked": {
+     "24": {
+      "k": 0,
+      "n": 20
+     },
+     "32": {
+      "k": 0,
+      "n": 20
+     },
+     "40": {
+      "k": 0,
+      "n": 20
+     },
+     "48": {
+      "k": 0,
+      "n": 20
+     },
+     "56": {
+      "k": 0,
+      "n": 20
+     }
+    }
+   }
+  },
+  "invisible_targets": [],
+  "loop": {
+   "cells": {
+    "focus\u00b7lens": {
+     "goal": "focus",
+     "arm": "lens",
+     "n": 20,
+     "rounds": [
+      {
+       "n": 20,
+       "share": {
+        "24": 0.0,
+        "32": 0.0,
+        "40": 0.04621212121212122,
+        "48": 0.12102272727272727,
+        "56": 0.356881313131313
+       },
+       "copied": 1.0,
+       "leaked": 0.0
+      },
+      {
+       "n": 20,
+       "share": {
+        "24": 0.0,
+        "32": 0.0,
+        "40": 0.03693181818181819,
+        "48": 0.152020202020202,
+        "56": 0.31976010101010094
+       },
+       "copied": 1.0,
+       "leaked": 0.0
+      },
+      {
+       "n": 20,
+       "share": {
+        "24": 0.0,
+        "32": 0.0,
+        "40": 0.0288510101010101,
+        "48": 0.09103535353535352,
+        "56": 0.13705808080808077
+       },
+       "copied": 1.0,
+       "leaked": 0.0
+      },
+      {
+       "n": 20,
+       "share": {
+        "24": 0.0,
+        "32": 0.0,
+        "40": 0.00625,
+        "48": 0.08308080808080806,
+        "56": 0.13743686868686866
+       },
+       "copied": 1.0,
+       "leaked": 0.0
+      }
+     ]
+    },
+    "focus\u00b7yoked": {
+     "goal": "focus",
+     "arm": "yoked",
+     "n": 20,
+     "rounds": [
+      {
+       "n": 20,
+       "share": {
+        "24": 0.0,
+        "32": 0.0,
+        "40": 0.03996212121212121,
+        "48": 0.12657828282828282,
+        "56": 0.35789141414141407
+       },
+       "copied": 1.0,
+       "leaked": 0.0
+      },
+      {
+       "n": 20,
+       "share": {
+        "24": 0.0,
+        "32": 0.0,
+        "40": 0.05612373737373737,
+        "48": 0.15555555555555553,
+        "56": 0.2345959595959596
+       },
+       "copied": 1.0,
+       "leaked": 0.0
+      },
+      {
+       "n": 20,
+       "share": {
+        "24": 0.0,
+        "32": 0.0,
+        "40": 0.0288510101010101,
+        "48": 0.07752525252525252,
+        "56": 0.0994949494949495
+       },
+       "copied": 1.0,
+       "leaked": 0.0
+      },
+      {
+       "n": 20,
+       "share": {
+        "24": 0.0,
+        "32": 0.0,
+        "40": 0.0125,
+        "48": 0.09103535353535352,
+        "56": 0.09008838383838383
+       },
+       "copied": 1.0,
+       "leaked": 0.0
+      }
+     ]
+    },
+    "focus\u00b7score": {
+     "goal": "focus",
+     "arm": "score",
+     "n": 20,
+     "rounds": [
+      {
+       "n": 20,
+       "share": {
+        "24": 0.0,
+        "32": 0.0,
+        "40": 0.03996212121212121,
+        "48": 0.12657828282828282,
+        "56": 0.3523358585858585
+       },
+       "copied": 1.0,
+       "leaked": 0.0
+      },
+      {
+       "n": 20,
+       "share": {
+        "24": 0.0,
+        "32": 0.0,
+        "40": 0.022916666666666665,
+        "48": 0.10479797979797978,
+        "56": 0.5339646464646465
+       },
+       "copied": 1.0,
+       "leaked": 0.0
+      },
+      {
+       "n": 20,
+       "share": {
+        "24": 0.0,
+        "32": 0.0,
+        "40": 0.011805555555555555,
+        "48": 0.08693181818181817,
+        "56": 0.2098484848484848
+       },
+       "copied": 1.0,
+       "leaked": 0.0
+      },
+      {
+       "n": 20,
+       "share": {
+        "24": 0.0,
+        "32": 0.0,
+        "40": 0.011805555555555555,
+        "48": 0.10460858585858583,
+        "56": 0.12695707070707068
+       },
+       "copied": 1.0,
+       "leaked": 0.0
+      }
+     ]
+    },
+    "focus\u00b7blind": {
+     "goal": "focus",
+     "arm": "blind",
+     "n": 20,
+     "rounds": [
+      {
+       "n": 20,
+       "share": {
+        "24": 0.0,
+        "32": 0.0,
+        "40": 0.04450757575757576,
+        "48": 0.12657828282828285,
+        "56": 0.356881313131313
+       },
+       "copied": 1.0,
+       "leaked": 0.0
+      },
+      {
+       "n": 20,
+       "share": {
+        "24": 0.0,
+        "32": 0.0,
+        "40": 0.02847222222222222,
+        "48": 0.08068181818181816,
+        "56": 0.15101010101010104
+       },
+       "copied": 1.0,
+       "leaked": 0.0
+      },
+      {
+       "n": 20,
+       "share": {
+        "24": 0.0,
+        "32": 0.0,
+        "40": 0.018055555555555554,
+        "48": 0.11338383838383839,
+        "56": 0.09292929292929294
+       },
+       "copied": 1.0,
+       "leaked": 0.0
+      },
+      {
+       "n": 20,
+       "share": {
+        "24": 0.0,
+        "32": 0.0,
+        "40": 0.00625,
+        "48": 0.08964646464646467,
+        "56": 0.07171717171717171
+       },
+       "copied": 1.0,
+       "leaked": 0.0
+      }
+     ]
+    },
+    "suppress\u00b7lens": {
+     "goal": "suppress",
+     "arm": "lens",
+     "n": 20,
+     "rounds": [
+      {
+       "n": 20,
+       "share": {
+        "24": 0.0,
+        "32": 0.0,
+        "40": 0.0125,
+        "48": 0.024305555555555556,
+        "56": 0.03623737373737374
+       },
+       "copied": 1.0,
+       "leaked": 0.0
+      },
+      {
+       "n": 20,
+       "share": {
+        "24": 0.0,
+        "32": 0.0,
+        "40": 0.0,
+        "48": 0.0,
+        "56": 0.004545454545454545
+       },
+       "copied": 1.0,
+       "leaked": 0.0
+      },
+      {
+       "n": 20,
+       "share": {
+        "24": 0.0,
+        "32": 0.0,
+        "40": 0.0,
+        "48": 0.0,
+        "56": 0.0
+       },
+       "copied": 1.0,
+       "leaked": 0.0
+      },
+      {
+       "n": 20,
+       "share": {
+        "24": 0.0,
+        "32": 0.0,
+        "40": 0.0,
+        "48": 0.011805555555555555,
+        "56": 0.0
+       },
+       "copied": 1.0,
+       "leaked": 0.0
+      }
+     ]
+    },
+    "suppress\u00b7yoked": {
+     "goal": "suppress",
+     "arm": "yoked",
+     "n": 20,
+     "rounds": [
+      {
+       "n": 20,
+       "share": {
+        "24": 0.0,
+        "32": 0.0,
+        "40": 0.0125,
+        "48": 0.024305555555555556,
+        "56": 0.03623737373737374
+       },
+       "copied": 1.0,
+       "leaked": 0.0
+      },
+      {
+       "n": 20,
+       "share": {
+        "24": 0.0,
+        "32": 0.0,
+        "40": 0.0,
+        "48": 0.0101010101010101,
+        "56": 0.02474747474747475
+       },
+       "copied": 1.0,
+       "leaked": 0.0
+      },
+      {
+       "n": 20,
+       "share": {
+        "24": 0.0,
+        "32": 0.0,
+        "40": 0.0,
+        "48": 0.0125,
+        "56": 0.0
+       },
+       "copied": 1.0,
+       "leaked": 0.0
+      },
+      {
+       "n": 20,
+       "share": {
+        "24": 0.0,
+        "32": 0.0,
+        "40": 0.00625,
+        "48": 0.01875,
+        "56": 0.0
+       },
+       "copied": 1.0,
+       "leaked": 0.0
+      }
+     ]
+    },
+    "suppress\u00b7score": {
+     "goal": "suppress",
+     "arm": "score",
+     "n": 20,
+     "rounds": [
+      {
+       "n": 20,
+       "share": {
+        "24": 0.0,
+        "32": 0.0,
+        "40": 0.0125,
+        "48": 0.024305555555555556,
+        "56": 0.03623737373737374
+       },
+       "copied": 1.0,
+       "leaked": 0.0
+      },
+      {
+       "n": 20,
+       "share": {
+        "24": 0.0,
+        "32": 0.0,
+        "40": 0.0,
+        "48": 0.0,
+        "56": 0.0101010101010101
+       },
+       "copied": 1.0,
+       "leaked": 0.0
+      },
+      {
+       "n": 20,
+       "share": {
+        "24": 0.0,
+        "32": 0.0,
+        "40": 0.0,
+        "48": 0.0,
+        "56": 0.01111111111111111
+       },
+       "copied": 1.0,
+       "leaked": 0.0
+      },
+      {
+       "n": 20,
+       "share": {
+        "24": 0.0,
+        "32": 0.0,
+        "40": 0.0,
+        "48": 0.0,
+        "56": 0.0
+       },
+       "copied": 1.0,
+       "leaked": 0.0
+      }
+     ]
+    },
+    "suppress\u00b7blind": {
+     "goal": "suppress",
+     "arm": "blind",
+     "n": 20,
+     "rounds": [
+      {
+       "n": 20,
+       "share": {
+        "24": 0.0,
+        "32": 0.0,
+        "40": 0.0125,
+        "48": 0.024305555555555556,
+        "56": 0.03623737373737375
+       },
+       "copied": 1.0,
+       "leaked": 0.0
+      },
+      {
+       "n": 20,
+       "share": {
+        "24": 0.0,
+        "32": 0.0,
+        "40": 0.0,
+        "48": 0.0,
+        "56": 0.0
+       },
+       "copied": 1.0,
+       "leaked": 0.0
+      },
+      {
+       "n": 20,
+       "share": {
+        "24": 0.0,
+        "32": 0.0,
+        "40": 0.0,
+        "48": 0.0,
+        "56": 0.004545454545454545
+       },
+       "copied": 1.0,
+       "leaked": 0.0
+      },
+      {
+       "n": 20,
+       "share": {
+        "24": 0.0,
+        "32": 0.0,
+        "40": 0.0,
+        "48": 0.01111111111111111,
+        "56": 0.0101010101010101
+       },
+       "copied": 1.0,
+       "leaked": 0.0
+      }
+     ]
+    },
+    "none\u00b7blind": {
+     "goal": "none",
+     "arm": "blind",
+     "n": 20,
+     "rounds": [
+      {
+       "n": 20,
+       "share": {
+        "24": 0.0,
+        "32": 0.0,
+        "40": 0.0,
+        "48": 0.0,
+        "56": 0.0
+       },
+       "copied": 1.0,
+       "leaked": 0.0
+      },
+      {
+       "n": 20,
+       "share": {
+        "24": 0.0,
+        "32": 0.0,
+        "40": 0.0,
+        "48": 0.0,
+        "56": 0.0
+       },
+       "copied": 1.0,
+       "leaked": 0.0
+      },
+      {
+       "n": 20,
+       "share": {
+        "24": 0.0,
+        "32": 0.0,
+        "40": 0.0,
+        "48": 0.0,
+        "56": 0.0
+       },
+       "copied": 1.0,
+       "leaked": 0.0
+      },
+      {
+       "n": 20,
+       "share": {
+        "24": 0.0,
+        "32": 0.0,
+        "40": 0.0,
+        "48": 0.0,
+        "56": 0.0
+       },
+       "copied": 1.0,
+       "leaked": 0.0
+      }
+     ]
+    }
+   },
+   "contrasts": {
+    "focus: lens \u2212 yoked": {
+     "n": 20,
+     "mean": 0.022979797979797982,
+     "ci": [
+      0.004356060606060606,
+      0.042424242424242434
+     ],
+     "lens_better": 8,
+     "other_better": 2,
+     "layers": [
+      "48",
+      "56"
+     ]
+    },
+    "focus: lens \u2212 blind": {
+     "n": 20,
+     "mean": 0.032354797979797977,
+     "ci": [
+      0.015498737373737376,
+      0.048484848484848485
+     ],
+     "lens_better": 12,
+     "other_better": 1,
+     "layers": [
+      "48",
+      "56"
+     ]
+    },
+    "focus: lens \u2212 score": {
+     "n": 20,
+     "mean": -0.005018939393939393,
+     "ci": [
+      -0.030366161616161614,
+      0.021527777777777778
+     ],
+     "lens_better": 6,
+     "other_better": 7,
+     "layers": [
+      "48",
+      "56"
+     ]
+    },
+    "suppress: lens \u2212 yoked": {
+     "n": 20,
+     "mean": -0.0034722222222222225,
+     "ci": [
+      -0.01875,
+      0.008333333333333333
+     ],
+     "lens_better": 1,
+     "other_better": 1,
+     "layers": [
+      "48",
+      "56"
+     ]
+    },
+    "suppress: lens \u2212 blind": {
+     "n": 20,
+     "mean": -0.004703282828282828,
+     "ci": [
+      -0.015656565656565657,
+      0.006597222222222222
+     ],
+     "lens_better": 1,
+     "other_better": 3,
+     "layers": [
+      "48",
+      "56"
+     ]
+    },
+    "suppress: lens \u2212 score": {
+     "n": 20,
+     "mean": 0.005902777777777778,
+     "ci": [
+      0.0,
+      0.014930555555555555
+     ],
+     "lens_better": 2,
+     "other_better": 0,
+     "layers": [
+      "48",
+      "56"
+     ]
+    }
+   }
+  }
+ }
+}

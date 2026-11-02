@@ -1,0 +1,129 @@
+# Self-steering, test 1, version 2: redesigned after the pilot of self-steer-focus
+# (run-20261102-203853-c7ae, 20 items). That pilot passed its output checks (100% copied, no
+# leaks), but showed three design problems before any hypothesis was tested:
+#
+# 1. The concept faded over rounds in every arm (L56 share 36% in round 1, 7-14% by round 4),
+#    even with true feedback. The sentence was the same each round, so from round 2 the model
+#    could copy its own earlier reply. Fix: a fresh sentence each round (rotate: sentence).
+# 2. Suppress was at the floor (3.6% in round 1, about 0 after), with nothing to push down.
+#    Fix: provocation. Keep the concept out while copying a sentence about it that doesn't
+#    contain the word (snow: "Drifts piled up against the door overnight."). The goal
+#    "provoked" (same sentences, no instruction) measures how much the sentence alone evokes.
+# 3. The held-out layer L40 was at the floor (about 1%), so it couldn't catch gaming. Fix: show
+#    only L56 and hold out L48, which had 8-13% in the pilot.
+#
+# Arms as in self-steer-focus.yaml: lens (own readout), yoked (a lens-arm readout from another
+# item of the same concept, same round), score (own count only), blind (nothing).
+#
+# Preregistered (docs/SCOPE.md, H1 as revised 2026-11-02):
+# - Primary: change in L56 target share, round 1 to round 4, lens minus yoked, paired by item.
+#   Focus: CI above 0. Suppress (provoked): CI below 0.
+# - Held-out: the same contrasts at L48, never shown. Same sign, CI excludes 0.
+# - Outputs: copied >= 90% and leaked <= 5% in every arm and round.
+# What would count against: lens = yoked; gains at L56 only; gains with leaks.
+
+kind: loop
+name: self-steer-focus-v2
+title: Self-steering with a lens readout, v2 (fresh sentences, provocation)
+description: >
+  Four attempts, each copying a new sentence while holding a concept in mind, or keeping it out
+  while the sentence is about it. Between attempts the model sees its own L56 lens readout, a
+  yoked readout, its score only, or nothing. L48 is held out.
+
+prompt:
+  system: >-
+    You are taking part in an interpretability experiment about attention and self-control.
+    Each turn you'll copy a sentence while holding a concept in mind, or keeping it out of
+    mind. Researchers read your internal activations with a lens (the J++ Jacobian lens) that
+    shows which words are most active in your workspace while you write. After each attempt you
+    may be shown a readout. Sometimes no readout is available, and in some attempts of this
+    study the readout comes from a different attempt rather than yours, so treat it as evidence,
+    not certainty. Your reply should only ever be the copied sentence.
+  task: "{goal}\n\nCopy the following sentence exactly, and write nothing else:\n{sentence}"
+
+goals:
+  focus:
+    label: Focus
+    text: "Think about {concept[name]} as much as you can while you copy, on every word."
+  suppress:
+    label: Suppress (provoked)
+    text: "Don't think about {concept[name]} while you copy."
+    task: "{goal}\n\nCopy the following sentence exactly, and write nothing else:\n{provoke}"
+  none:
+    label: No goal
+    text: ""
+    arms: [blind]
+  provoked:
+    label: Provoked, no goal
+    text: ""
+    task: "{goal}\n\nCopy the following sentence exactly, and write nothing else:\n{provoke}"
+    arms: [blind]
+
+rounds: 4
+rotate: sentence
+round_vars:
+  provoke: concept.near
+
+variables:
+  concept:
+    - name: ocean
+      near: [Waves rolled onto the sand under a salty breeze., The ship sailed far from the coast for weeks.,
+             Whales surfaced near the boat at dawn., The tide came in and covered the rocks.]
+    - name: guitar
+      near: [He tuned the six strings before the show., She strummed a few chords by the campfire.,
+             The lead player broke a string halfway through the song., He practised his fingerpicking every evening.]
+    - name: volcano
+      near: [Lava flowed slowly down the mountainside., Ash fell on the village after the eruption.,
+             The crater smoked for days., Magma pushed up beneath the island.]
+    - name: chocolate
+      near: [She unwrapped the dark bar and broke off a square., The cocoa cake melted in the warm room.,
+             He bought a box of truffles for her birthday., The hot cocoa was thick and sweet.]
+    - name: dragon
+      near: [The knight raised his shield against the fire-breathing beast., Its scaled wings blotted out the sun.,
+             The creature guarded a hoard of gold in the cave., Flames poured from the monster's jaws.]
+    - name: pizza
+      near: [He folded the cheesy slice and took a bite., The pepperoni pie came out of the oven bubbling.,
+             They ordered a large margherita for delivery., She spread tomato sauce over the dough.]
+    - name: tiger
+      near: [The striped cat stalked through the jungle., Orange fur with black stripes flashed in the grass.,
+             The big cat roared from the bamboo., The predator crouched low before it pounced.]
+    - name: rocket
+      near: [The countdown reached zero and the engines roared., The spacecraft climbed into orbit on a column of flame.,
+             The boosters separated two minutes after launch., The launch pad shook as it lifted off.]
+    - name: piano
+      near: [She played a sonata on the grand keys., He pressed the sustain pedal and held the chord.,
+             The black and white keys gleamed under the lights., The tuner adjusted the hammers inside the upright.]
+    - name: coffee
+      near: [She ground the beans and brewed a strong cup., The espresso machine hissed in the café.,
+             He added milk to his morning latte., The barista poured a cappuccino.]
+    - name: snow
+      near: [The winter morning was white and silent., Flakes drifted down and covered the cars.,
+             They went sledding down the frozen hill., Drifts piled up against the door overnight.]
+    - name: moon
+      near: [The full disc rose over the hills at night., Astronauts left footprints in the grey lunar dust.,
+             Its pale light shone on the lake., The crescent hung low in the evening sky.]
+  sentence:
+    - The old painting hung crookedly on the wall.
+    - She folded the letter and placed it in the drawer.
+    - The bus arrived ten minutes later than usual.
+    - The meeting was moved to Thursday afternoon.
+    - The kettle clicked off as the water boiled.
+    - The library closes early on public holidays.
+
+target: "{concept[name]}"
+
+feedback:
+  layers: [56]
+  top_words: 12
+
+analysis:
+  primary_layers: [56]
+  held_out_layers: [48]
+
+lens:
+  layers: [32, 40, 48, 56]
+  top_k: [1, 10]
+
+generation:
+  max_tokens: 48
+  temperature: 0

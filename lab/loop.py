@@ -49,7 +49,13 @@ def validate(spec: dict) -> list[str]:
     if not isinstance(variables, dict) or not all(isinstance(v, list) and v for v in variables.values()):
         errs.append("variables: each variable needs a non-empty list of values.")
         variables = {}
-    known = set(variables) | {"goal"}
+    round_vars = spec.get("round_vars") or {}
+    known = set(variables) | {"goal"} | set(round_vars)
+    for name, path in round_vars.items():
+        var, _, field = str(path).partition(".")
+        vals = variables.get(var) or []
+        if not field or not vals or not all(isinstance(v, dict) and isinstance(v.get(field), list) and v[field] for v in vals):
+            errs.append(f"round_vars.{name}: {path!r} must name a mapping variable and a list field in it (concept.near).")
     templates = [str(prompt.get("system", "") or ""), str(spec.get("target", "")), str(spec.get("answer", ""))]
     for key, g in goals.items():
         if not isinstance(g, dict) or "text" not in g:
@@ -98,13 +104,20 @@ def condition_key(goal: str, arm: str) -> str:
 
 
 def _round_vars(spec: dict, vals: dict, r: int) -> dict:
-    """With `rotate`, round r uses the next value of that variable (a fresh problem each round),
-    so earlier answers in the transcript can't simply be copied forward."""
+    """With `rotate`, round r uses the next value of that variable (a fresh problem or sentence
+    each round), so earlier replies in the transcript can't simply be copied forward.
+    `round_vars` picks one entry per round from a list inside a mapping variable:
+    {provoke: concept.near} sets {provoke} to concept["near"][r]."""
+    out = dict(vals)
     key = spec.get("rotate")
-    if not key:
-        return vals
-    pool = spec["variables"][key]
-    return {**vals, key: pool[(pool.index(vals[key]) + r) % len(pool)]}
+    if key:
+        pool = spec["variables"][key]
+        out[key] = pool[(pool.index(vals[key]) + r) % len(pool)]
+    for name, path in (spec.get("round_vars") or {}).items():
+        var, field = path.split(".")
+        seq = vals[var][field]
+        out[name] = seq[r % len(seq)]
+    return out
 
 
 def task_message(spec: dict, goal: dict, vals: dict) -> str:
@@ -161,9 +174,11 @@ def clean_output(output: str, vals: dict, spec: dict, template: str) -> dict:
     """Did the model do the visible task, and did it say the target out loud?"""
     first = output.strip().split("\n")[0].strip()
     out = {"leaked": any(re.search(rf"\b{re.escape(w)}\b", first.lower()) for w in target_words(spec["target"].format(**vals)))}
-    if "sentence" in _fields(template):
+    # The text to copy is {sentence}, or {provoke} in the provocation tasks.
+    copy = next((f for f in ("sentence", "provoke") if f in _fields(template)), None)
+    if copy:
         norm = lambda s: re.sub(r"\s+", " ", s.strip().strip('"').lower())  # noqa: E731
-        out["copied"] = norm(first) == norm(str(vals["sentence"]))
+        out["copied"] = norm(first) == norm(str(vals[copy]))
     if spec.get("answer"):
         answers = target_words(spec["answer"].format(**vals))
         tail = output.split("Answer:")[-1].lower() if "Answer:" in output else ""
@@ -346,23 +361,27 @@ def loop_stats(spec: dict, items: list[dict]) -> dict:
             by_round.append({"n": len(rs), "share": {l: _mean([x["share"][l] for x in rs if x["share"][l] is not None]) for l in layers},
                              **{k: v for k, v in checks.items() if v is not None}})
         out["cells"][condition_key(g, a)] = {"goal": g, "arm": a, "n": len(mine), "rounds": by_round}
-    primary = [str(x) for x in (spec.get("analysis") or {}).get("primary_layers", spec["feedback"]["layers"])]
+    analysis = spec.get("analysis") or {}
+    sets = {"": [str(x) for x in analysis.get("primary_layers", spec["feedback"]["layers"])]}
+    if analysis.get("held_out_layers"):
+        held = [str(x) for x in analysis["held_out_layers"]]
+        sets[f" (held out: {', '.join('L' + x for x in held)})"] = held
     for g in spec["goals"]:
-        def delta(it):
-            first, last = it["rounds"][0]["share"], it["rounds"][-1]["share"]
-            vals = [last[l] - first[l] for l in primary if last[l] is not None and first[l] is not None]
-            return _mean(vals)
-        by_arm = {a: {it["item"]: delta(it) for it in rows if it["goal"] == g and it["arm"] == a and len(it["rounds"]) == rounds}
-                  for a in ARMS}
-        for other in ("yoked", "blind", "score"):
-            shared = sorted(set(by_arm["lens"]) & set(by_arm[other]))
-            diffs = [by_arm["lens"][i] - by_arm[other][i] for i in shared
-                     if by_arm["lens"][i] is not None and by_arm[other][i] is not None]
-            if diffs:
-                out["contrasts"][f"{g}: lens − {other}"] = {
-                    "n": len(diffs), "mean": _mean(diffs), "ci": _boot_ci(diffs),
-                    "lens_better": sum(d > 0 for d in diffs), "other_better": sum(d < 0 for d in diffs),
-                    "layers": primary}
+        for suffix, use in sets.items():
+            def delta(it, use=use):
+                first, last = it["rounds"][0]["share"], it["rounds"][-1]["share"]
+                return _mean([last[l] - first[l] for l in use if last[l] is not None and first[l] is not None])
+            by_arm = {a: {it["item"]: delta(it) for it in rows if it["goal"] == g and it["arm"] == a and len(it["rounds"]) == rounds}
+                      for a in ARMS}
+            for other in ("yoked", "blind", "score"):
+                shared = sorted(set(by_arm["lens"]) & set(by_arm[other]))
+                diffs = [by_arm["lens"][i] - by_arm[other][i] for i in shared
+                         if by_arm["lens"][i] is not None and by_arm[other][i] is not None]
+                if diffs:
+                    out["contrasts"][f"{g}: lens − {other}{suffix}"] = {
+                        "n": len(diffs), "mean": _mean(diffs), "ci": _boot_ci(diffs),
+                        "lens_better": sum(d > 0 for d in diffs), "other_better": sum(d < 0 for d in diffs),
+                        "layers": use}
     return out
 
 
@@ -383,14 +402,17 @@ def loop_report(meta: dict, items: list[dict]) -> list[str]:
             ci = f"{c['ci'][0] * 100:+.1f} to {c['ci'][1] * 100:+.1f} pts" if c["ci"] else "n/a"
             lines.append(f"| {key} | {c['n']} | {c['mean'] * 100:+.1f} pts | {ci} | {c['lens_better']} / {c['other_better']} |")
         lines.append("")
-    deep = layers[-1]
-    lines += [f"### Target share by round, L{deep}", "",
-              "| Goal · arm | items | " + " | ".join(f"R{r + 1}" for r in range(meta["rounds"])) + " |",
-              "|---|---|" + "---|" * meta["rounds"]]
-    for key, c in stats["cells"].items():
-        cell = [f"{x['share'][deep] * 100:.1f}%" if x["share"].get(deep) is not None else "n/a" for x in c["rounds"]]
-        lines.append(f"| {key} | {c['n']} | " + " | ".join(cell) + " |")
-    lines += ["", "### Last round by layer", "", "| Goal · arm | " + " | ".join(f"L{l}" for l in layers) + " |",
+    shown = [str(x) for x in (spec.get("analysis") or {}).get("held_out_layers", [])]
+    for deep in [layers[-1]] + [x for x in shown if x != layers[-1]]:
+        note = " (held out, never shown)" if deep in shown else ""
+        lines += [f"### Target share by round, L{deep}{note}", "",
+                  "| Goal · arm | items | " + " | ".join(f"R{r + 1}" for r in range(meta["rounds"])) + " |",
+                  "|---|---|" + "---|" * meta["rounds"]]
+        for key, c in stats["cells"].items():
+            cell = [f"{x['share'][deep] * 100:.1f}%" if x["share"].get(deep) is not None else "n/a" for x in c["rounds"]]
+            lines.append(f"| {key} | {c['n']} | " + " | ".join(cell) + " |")
+        lines.append("")
+    lines += ["### Last round by layer", "", "| Goal · arm | " + " | ".join(f"L{l}" for l in layers) + " |",
               "|---|" + "---|" * len(layers)]
     for key, c in stats["cells"].items():
         sh = c["rounds"][-1]["share"]

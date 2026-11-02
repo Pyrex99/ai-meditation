@@ -252,3 +252,22 @@ def test_loop_feedback_and_checks():
     assert L.carrier(nl, {"score_until": "newline"}) == nl[:1]
     rot = {"rotate": "p", "variables": {"p": ["x", "y", "z"]}}
     assert [L._round_vars(rot, {"p": "y"}, r)["p"] for r in range(3)] == ["y", "z", "x"]
+
+
+def test_loop_v2_rotates_sentences_and_provokes():
+    from lab import experiment as E
+    from lab import loop as L
+
+    raw, spec = E.load("self-steer-focus-v2")
+    assert E.validate(spec) == []
+    meta = asyncio.run(L.run_loop(SimEngine(), spec["name"], raw, spec, run_id="run-test-loop2",
+                                  limit=3, seed=1, cancel=asyncio.Event()))
+    items = store.load_run_items("run-test-loop2")
+    focus = next(it for it in items if it["condition"] == "focus·lens")
+    assert len({r["vars"]["sentence"] for r in focus["rounds"]}) == 4
+    sup = next(it for it in items if it["condition"] == "suppress·lens")
+    assert [r["vars"]["provoke"] for r in sup["rounds"]] == sup["vars"]["concept"]["near"]
+    assert "copied" in sup["rounds"][0]["check"]
+    assert any("held out: L48" in k for k in meta["results"]["loop"]["contrasts"])
+    bad = {**spec, "round_vars": {"provoke": "concept.missing"}}
+    assert any("round_vars.provoke" in e for e in L.validate(bad))

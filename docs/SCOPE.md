@@ -46,16 +46,17 @@ Code: `lab/loop.py` (`kind: loop` specs). Run with `python -m lab.cli run <name>
 ## Hypotheses (preregistered)
 
 Primary metric unless stated: change in target **token share** (fraction of scored tokens with
-the target in the lens top-10), mean of L48 and L56, from round 1 to the last round. Contrasts
+the target in the lens top-10) at the layer shown to the model (L56 since v2; L48 and L56 in
+v1), from round 1 to the last round. Contrasts
 are paired by item, 95% bootstrap CI with a fixed seed. Computed by `loop_stats` and printed in
 the run report.
 
 | # | Hypothesis | Test | Evidence for | Status |
 |---|---|---|---|---|
-| H1a | Lens feedback helps hold a concept | `self-steer-focus`, focus: lens − yoked | CI above 0 | not run |
-| H1b | Lens feedback helps keep it out | `self-steer-focus`, suppress: lens − yoked | CI below 0 | not run |
+| H1a | Lens feedback helps hold a concept | `self-steer-focus-v2`, focus: lens − yoked at L56 | CI above 0 | not run (v1 pilot run-20261102-203853-c7ae: design revised, see Changes) |
+| H1b | Lens feedback helps keep it out | `self-steer-focus-v2`, suppress (provoked): lens − yoked at L56 | CI below 0 | not run |
 | H1c | It is not just repetition | lens − blind, both goals | as H1a/b | not run |
-| H1d | It is not lens-gaming | the same contrasts at L40, never shown to the model | same sign, CI excludes 0 | not run |
+| H1d | It is not lens-gaming | the same contrasts at L48, never shown to the model | same sign, CI excludes 0 | not run |
 | H1e | Outputs stay clean | copied ≥ 90% and leaked ≤ 5% in every arm and round | | not run |
 | H2a | Lens feedback helps hold a hidden answer | `self-steer-hidden-answer`, solve: lens − yoked | CI above 0 | not run |
 | H2b | And makes the model more accurate | accuracy, rounds 2-4, lens vs yoked and blind | lens higher, CI excludes 0 | not run |
@@ -70,10 +71,11 @@ nothing the model can use. Try one redesign (below), then stop and write it up a
 
 ## Running order
 
-1. **Pilot** `self-steer-focus` with `--limit 20` (20 items × 9 goal-arm cells × 4 rounds = 720
+1. **Pilot** `self-steer-focus` with `--limit 20` (done: run-20261102-203853-c7ae; led to v2).
+   Then pilot `self-steer-focus-v2` with `--limit 12`. Originally: (20 items × 9 goal-arm cells × 4 rounds = 720
    generations). Manipulation checks only: copied and leaked rates, that round 1 matches across
    arms, that feedback reads sensibly in the transcripts. Don't test hypotheses on the pilot.
-2. **Full** `self-steer-focus` (120 items, 4320 generations). Test H1a-e.
+2. **Full** `self-steer-focus-v2` (72 items, 2880 generations). Test H1a-e.
 3. **Pilot, then full** `self-steer-hidden-answer`. First check the ceiling: if `direct` accuracy
    is low, the problems are too hard and H2b can't be read. Replace items until the ceiling is
    ≥ 80% and round-1 `solve` accuracy is clearly below it (that gap is the room to improve).
@@ -125,3 +127,14 @@ nothing the model can use. Try one redesign (below), then stop and write it up a
 ## Changes
 
 - 2026-11-02: first version. Path 1, H1-H2, specs `self-steer-focus` and `self-steer-hidden-answer`.
+- 2026-11-02, after the v1 pilot (run-20261102-203853-c7ae, 20 items, no hypothesis tested):
+  outputs were clean (100% copied, 0 leaks), but the design couldn't answer H1. (1) The concept
+  faded over rounds in every arm, including lens (L56 share 36% in round 1, 7-14% in round 4),
+  probably because an identical sentence could be copied from the model's own earlier reply.
+  (2) Suppress started at 3.6% and fell to 0: no room to show control. (3) The held-out layer
+  L40 was about 1%, too low to show anything. New spec `self-steer-focus-v2`: a fresh sentence
+  each round; suppress while copying a sentence about the concept (provocation), with a
+  no-instruction baseline on the same sentences; the model is shown L56 only, and L48 is held
+  out. H1a, H1b and H1d now refer to v2. For the record, the pilot's numbers (not a test):
+  focus lens − yoked at L48+L56 was +2.3 pts (CI +0.4 to +4.2, n=20), all from L56. At L48 the
+  two arms were equal. The score-only arm rose to 53% at L56 in round 2, then fell.
