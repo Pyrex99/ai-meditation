@@ -22,7 +22,7 @@ from fastapi.responses import FileResponse, JSONResponse, StreamingResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 
-from . import ask, experiment as experiments, practice as practices, runpod, store
+from . import ask, experiment as experiments, loop, practice as practices, runpod, store
 from .engine import Engine, InterpEngine, SimEngine
 from .interview import run_interview
 from .report import run_report, sit_report
@@ -383,7 +383,7 @@ async def start_run(body: RunIn) -> dict:
 
     async def go() -> None:
         try:
-            runner = experiments.run_readout if spec.get("kind") == "readout" else experiments.run_experiment
+            runner = {"readout": experiments.run_readout, "loop": loop.run_loop}.get(spec.get("kind"), experiments.run_experiment)
             meta = await runner(engine, body.experiment, raw, spec, run_id=run_id, limit=body.limit, seed=seed, cancel=cancel)
             store.write_run_report(run_id, run_report(meta, store.load_run_items(run_id)))
             store.compress_run_items(run_id)
@@ -423,6 +423,9 @@ async def run_items(run_id: str, condition: str | None = None, full: bool = Fals
         items = [i for i in items if i["condition"] == condition]
     if not full:
         items = [{k: v for k, v in i.items() if k != "steps"} for i in items]
+        for i in items:
+            if "rounds" in i:  # loop items: each round has its own steps
+                i["rounds"] = [{k: v for k, v in r.items() if k != "steps"} for r in i["rounds"]]
     return items
 
 

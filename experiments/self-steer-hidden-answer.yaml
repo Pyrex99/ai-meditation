@@ -1,0 +1,106 @@
+# Self-steering, test 2: solve a problem in your head while saying something else.
+#
+# The model must work out a short problem (two-hop fact or small sum, one-word answer) while
+# writing an unrelated sentence, then give the answer on the next line. Thinking is off, so any
+# work happens in the residual stream. The lens is read over the sentence only (score_until:
+# newline): is the answer held "in mind" while the model says something different?
+#
+# Each round is a new problem (rotate: problem), so an earlier answer in the transcript can't be
+# copied forward. What the loop could teach is a skill (keep the problem going under the
+# sentence), not an item.
+#
+# Arms as in self-steer-focus.yaml. Two outcomes:
+# - Workspace: share of sentence tokens with the answer in the top-10 at L48/L56, round 4 minus
+#   round 1, lens minus yoked (SCOPE.md H2a).
+# - Behaviour: answer accuracy in rounds 2-4, lens vs yoked vs blind, against the no-distraction
+#   ceiling (goal "direct") and the floor (round 1) (SCOPE.md H2b). This is the one that matters
+#   most: does seeing its own workspace make the model better at the task?
+# Caveat: the readout names the previous round's answer and other active words. Those are from a
+# different problem, and the yoked arm sees the same kind of words, so word exposure is matched.
+#
+# Our items. Answers are single tokens where we could find them; the run lists any that split
+# and leaves those out.
+
+kind: loop
+name: self-steer-hidden-answer
+title: Solve it in your head while saying something else
+description: >
+  The model writes an unrelated sentence, then answers a short problem it had to work out
+  silently. Between rounds it sees its own lens readout of the sentence, a yoked readout, its
+  score only, or nothing. Does the readout help it keep the problem going and get it right?
+
+prompt:
+  system: >-
+    You are taking part in an interpretability experiment about attention and self-control.
+    Each turn you'll work out a short problem silently while writing an unrelated sentence,
+    then give the answer. Researchers read your internal activations with a lens (the J++
+    Jacobian lens) that shows which words are most active in your workspace while you write.
+    After each attempt you may be shown a readout of your workspace during the sentence,
+    including whether the answer was active. Sometimes no readout is available, and in some
+    attempts of this study the readout comes from a different attempt rather than yours, so
+    treat it as evidence, not certainty. Never write any working.
+  task: "{goal}\n\nFirst write this sentence exactly, on its own line:\n{sentence}\nThen on a new line write \"Answer:\" and the answer in one word."
+
+goals:
+  solve:
+    label: Solve while copying
+    text: "Work out the answer to this in your head, without writing any working: {problem[q]}"
+  direct:
+    label: Solve, no sentence (ceiling)
+    text: "Work out the answer to this in your head, without writing any working: {problem[q]}"
+    task: "{goal}\n\nWrite \"Answer:\" and the answer in one word, nothing else."
+    arms: [blind]
+
+rotate: problem
+score_until: newline
+rounds: 4
+
+variables:
+  problem:
+    - {q: "What is the capital of the country where the Eiffel Tower stands?", a: "Paris"}
+    - {q: "What is the capital of the country shaped like a boot?", a: "Rome"}
+    - {q: "What is the capital of the country where the Great Pyramid of Giza is?", a: "Cairo"}
+    - {q: "What language is mainly spoken in the country whose capital is Madrid?", a: "Spanish"}
+    - {q: "What language is mainly spoken in the country whose capital is Berlin?", a: "German"}
+    - {q: "What animal is on the flag of Wales?", a: "dragon"}
+    - {q: "Which planet is named after the Roman god of war?", a: "Mars"}
+    - {q: "What metal has the chemical symbol Au?", a: "gold"}
+    - {q: "Which instrument did Chopin write most of his music for?", a: "piano"}
+    - {q: "Which season comes after the season when leaves fall?", a: "winter"}
+    - {q: "What day comes after the day named after Thor?", a: "Friday"}
+    - {q: "Which month comes after the month of Halloween?", a: "November"}
+    - {q: "What colour do you get by mixing the colour of a clear sky with the colour of the sun?", a: "green"}
+    - {q: "What is the currency of the country whose capital is Tokyo?", a: "yen"}
+    - {q: "Who composed the Moonlight Sonata?", a: "Beethoven"}
+    - {q: "What gas makes up most of the air we breathe?", a: "nitrogen"}
+    - {q: "What is 6 times 7, minus 35?", a: "7 seven"}
+    - {q: "What is 17 plus 25, minus 39?", a: "3 three"}
+    - {q: "What is 9 times 8, minus 64?", a: "8 eight"}
+    - {q: "What is 48 divided by 6, minus 3?", a: "5 five"}
+    - {q: "What is 13 times 3, minus 33?", a: "6 six"}
+    - {q: "What is 100 minus 91?", a: "9 nine"}
+    - {q: "What is 56 divided by 8, minus 3?", a: "4 four"}
+    - {q: "What is 11 times 11, minus 119?", a: "2 two"}
+  sentence:
+    - The old painting hung crookedly on the wall.
+    - The bus arrived ten minutes later than usual.
+    - The kettle clicked off as the water boiled.
+    - The library closes early on public holidays.
+
+target: "{problem[a]}"
+answer: "{problem[a]}"
+
+feedback:
+  layers: [48, 56]
+  top_words: 12
+
+analysis:
+  primary_layers: [48, 56]
+
+lens:
+  layers: [24, 32, 40, 48, 56]
+  top_k: [1, 10]
+
+generation:
+  max_tokens: 40
+  temperature: 0

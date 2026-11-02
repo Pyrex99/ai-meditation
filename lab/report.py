@@ -83,7 +83,8 @@ def run_report(meta: dict, items: list[dict] | None = None) -> str:
         f"- Experiment: {meta['experiment']} ({meta['title']}), spec sha256 {meta['spec_sha256'][:12]}",
         f"- Model: {meta['model']}",
         f"- Started: {meta['created']}, seed {meta['seed']}, items per condition: {meta.get('limit') or 'all'}",
-        f"- Status: {meta['status']} ({meta['progress']['done']}/{meta['progress']['total']} generations)",
+        f"- Status: {meta['status']} ({meta['progress']['done']}/{meta['progress']['total']} "
+        f"{'transcripts of ' + str(meta.get('rounds')) + ' rounds' if meta.get('kind') == 'loop' else 'generations'})",
         "",
         ("Recall@k = share of an item's hidden words in the lens top-k at the read position."
          if meta.get("kind") == "readout" else
@@ -109,7 +110,11 @@ def run_report(meta: dict, items: list[dict] | None = None) -> str:
         for label, tr in tracked:
             lines.append(f"| {label} | " + " | ".join(f"{tr[str(l)]['k']}/{tr[str(l)]['n']}" for l in layers) + " |")
         lines.append("")
-    if items:
+    if items and meta.get("kind") == "loop":
+        from .loop import loop_report
+
+        lines += loop_report(meta, items)
+    elif items:
         lines += _readout_best(meta, res) if meta.get("kind") == "readout" else _per_position(meta, items) + _sustain(meta, items)
         if any(it.get("expect") for it in items):
             lines += _recitation(meta, items)

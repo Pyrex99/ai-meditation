@@ -1,0 +1,76 @@
+# Silent mantra: can the model keep a phrase going "in its head" while writing only dots?
+#
+# Built on the focus / neutral / suppress design from Ayonrinde & Lindsey (2026), J++ Lens,
+# Figure 5. Here the carrier is a row of periods instead of a copied sentence. We ask the model
+# to silently repeat a mantra while it writes, then read the J++ lens at every generated token.
+#
+# Question: under the "repeat silently" instruction, do the mantra's words show up in the
+# workspace, and do they persist across the whole row of dots? Or do they fade after the
+# first few tokens, the way neutral mentions fade?
+#
+# Two mantras:
+# - "Om mani padme hum": tracked word by word. "padme", and maybe "mani", will likely split
+#   into several tokens and can't be read. The run reports which ones split. "Om" and "hum"
+#   are the best bets.
+# - "love": a single-token control for the same instruction.
+# Every run tracks every word, so each mantra serves as a baseline for the other. "love"
+# readouts in the Om runs show how often "love" appears unprompted, and the reverse holds too.
+#
+# What would count against the hypothesis:
+# - Focus hit rate is not clearly above both neutral and suppress at mid-to-late layers
+#   (40-56).
+# - Focus hits appear only at the first one or two dot tokens and then drop to the neutral
+#   level. That would mean no sustained mantra, just a lingering trace of the instruction.
+#   Check this in the per-position breakdown.
+# - The mantra words show up equally often in the other mantra's runs. That would be
+#   generic leakage, not the instructed content.
+# Also discard runs where the model writes the mantra instead of dots, and report how many
+# runs that was.
+
+name: silent-mantra
+title: Silent mantra under a dots-only output (J++)
+description: >
+  The model is told to output only periods while silently repeating a mantra ("Om mani padme
+  hum" or "love"). Does the mantra appear in the J++ workspace readout across the dot tokens
+  under the focus instruction, more than under neutral mention, suppression, or no
+  instruction, and does it persist across positions instead of decaying?
+
+prompt:
+  system: ""
+  user: "{instruction}\n\nNow write only a row of periods, about {count} of them, like this: ..........\nWrite nothing else."
+
+conditions:
+  focus:
+    label: Repeat silently
+    instruction: "While you write, silently repeat the mantra \"{mantra}\" in your mind, over and over, with every period. Do not write the mantra."
+  neutral:
+    label: Neutral mention
+    instruction: "Someone mentioned the mantra \"{mantra}\" earlier today."
+  suppress:
+    label: Suppress
+    instruction: "Don't think about the mantra \"{mantra}\" while you write."
+  none:
+    label: No instruction
+    instruction: ""
+
+variables:
+  mantra: ["Om mani padme hum", "love"]
+  count: [8, 12, 16, 20, 24, 32, 40, 48]
+
+# The target is fixed, and the Om-mantra words go in also_track. Every run is scored on all
+# of them, so cross-mantra baselines come for free.
+target: "love"
+also_track: [Om, om, mani, padme, hum, mantra, chant, prayer, peace]
+
+generation:
+  max_tokens: 48
+  temperature: 0
+  stop_words: []
+
+lens:
+  layers: [8, 16, 24, 32, 40, 48, 56]
+  top_k: [1, 5, 10]
+  jacobian: true
+
+# No published values for this task. For context, the paper's focus-on-copy figure
+# (26% at layer 56) is in directed-modulation.yaml.

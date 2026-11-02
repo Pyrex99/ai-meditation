@@ -1,6 +1,7 @@
-# Handoff: state of the lab (2026-10-18)
+# Handoff: state of the lab (2026-11-02)
 
-Read this, then `docs/VISION.md`, to pick up where the last session stopped.
+Read this, then `docs/SCOPE.md` (the research plan: proving self-steering), then
+`docs/VISION.md`, to pick up where the last session stopped.
 
 ## What this is
 
@@ -40,29 +41,36 @@ lens top-k at any copied token.
   At L24 only focus is above baseline.
 
 **run-20261018-190939-86bb, jpp-readout (exact published items, 496/496).**
-Per-layer recall@10 peaks: multihop 39.8%, multilingual 44.6%, typo 86.5%, association 25.5%,
-poetry 13.3% (L56). Macro of those per-layer peaks is 41.9%, a lower bound on the published
-metric (best layer per item; published J++ 55.2%, J-Lens 35.7%). The best-layer table is in the
-rebuilt report; rebuild it to get the number. Task order matches the post. Poetry is higher than
-published (≤5%), all at L56; check the read position (last newline).
+Recall@10 at each item's best layer (the published metric, in the rebuilt report): macro **55.5%**
+vs published J++ 55.2% (J-Lens 35.7%). Multihop 55.2%, multilingual 73.8%, typo 95.8%,
+association 38.2% (published 37.0%), poetry 14.3% (published 5.0%; check the read position).
+The lens stack replicates.
 
-**run-20261018-191538-7657, silent-mantra (Chris's spec, local only).** All zeros, every
-condition and layer, including tracked words. Suspected: periods pack into few tokens, or the
-model didn't write dots. Superseded by `experiments/silent-mantra-beads.yaml` (📿 carrier, one
-target word per item: love, peace, bliss, lotus + six controls). Not yet run.
+**Silent mantra and recitation (hold a word while writing a row of beads).** Mostly null.
+- run-20261018-191538-7657 (periods): all zeros.
+- run-20261018-200628-e3cd (📿 beads, n=18 per condition): suppress hit more than "repeat
+  silently" at L56 (94% vs 50% of items, top-10). Small n; a white-bear pattern again.
+- run-20261018-220132-aa66 (● beads, 3 wordings): repeat silently 18% of items at L56, but
+  sustain 1.9% of beads: the word shows on the first and last beads, not throughout.
+- run-20261018-224717-6b69 (silent recitation, phrase lined up with beads): recite 16% of items
+  at L56, sustain 0.8%.
+So open-loop instruction doesn't hold a word through a long output. That is part of why the
+lens-feedback loop is next.
+
+**Self-steering loop (built 2026-11-02, not run on the model).** `lab/loop.py`, `kind: loop`:
+several rounds of the same task, and between rounds the model gets its own lens readout, a
+yoked readout from another attempt, its score only, or nothing. Specs:
+`experiments/self-steer-focus.yaml`, `experiments/self-steer-hidden-answer.yaml`. Hypotheses
+and running order are in `docs/SCOPE.md`. Tested on the simulated engine only.
 
 ## Next steps
 
-1. `./sync.sh` on the Mac so the runs above are on GitHub (they were made before syncing existed).
-2. Rebuild both reports (button on each run) and read: the readout best-layer macro vs 55.2%;
-   the per-token rates for focus/suppress vs the published 26% / 7-8%; the failure-word examples.
-3. Run silent-mantra-beads.
-4. If the per-token definition matches the post better, make it the headline metric for
-   directed-modulation. Consider reading the instruction tokens too (the early retrieve step).
-5. Next replication: the naming-vs-avoiding ablation (J++ post, Figure 7), which needs lens-vector
-   ablation (not built yet).
-6. Later: the mala sit (`practices/mala-sit.yaml`, inside Experiments), then the practice library
-   in `docs/VISION.md`.
+1. Pilot `self-steer-focus` on the GPU: `python -m lab.cli run self-steer-focus --engine interp
+   --limit 20` (720 generations). Check copied/leaked rates and read a few transcripts.
+2. Full `self-steer-focus`; test H1a-e in `docs/SCOPE.md` and fill in its Status column.
+3. Pilot `self-steer-hidden-answer`; check the `direct` ceiling before reading H2.
+4. Build the held-out instrument (concept-vector projection over copied tokens) if H1 is positive.
+5. Older threads, paused: the naming-vs-avoiding ablation (J++ Figure 7), the mala sit.
 
 ## Open product notes
 

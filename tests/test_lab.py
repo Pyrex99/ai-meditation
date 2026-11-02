@@ -187,3 +187,68 @@ def test_recitation_spec_runs_and_scores_phase():
             "vars": {}, "steps": [{"tok": c, "reads": read(w)} for c, w in zip("●●○", ["om", "ah", "hum"])]}
     table = "\n".join(_recitation(meta, [fake]))
     assert "| Recite silently (1) | 100.0% / 0.0%" in table
+
+
+def test_loop_specs_validate_and_count():
+    from lab import experiment as E
+    from lab import loop as L
+
+    for name in ("self-steer-focus", "self-steer-hidden-answer"):
+        raw, spec = E.load(name)
+        assert E.validate(spec) == [], name
+    _, spec = E.load("self-steer-focus")
+    assert E.n_generations(spec) == 20 * 6 * (4 + 4 + 1) * 4
+    bad = {**spec, "feedback": {"layers": [99]}, "rounds": 1}
+    errs = L.validate(bad)
+    assert any("feedback.layers" in e for e in errs) and any("rounds" in e for e in errs)
+
+
+def test_loop_runs_yokes_and_reports():
+    from lab import experiment as E
+    from lab import loop as L
+    from lab.report import run_report
+
+    raw, spec = E.load("self-steer-focus")
+    meta = asyncio.run(L.run_loop(SimEngine(), "self-steer-focus", raw, spec, run_id="run-test-loop",
+                                  limit=4, seed=1, cancel=asyncio.Event()))
+    assert meta["status"] == "complete" and meta["progress"]["done"] == 4 * 9
+    items = store.load_run_items("run-test-loop")
+    by_idx = {it["i"]: it for it in items}
+    for it in items:
+        assert len(it["rounds"]) == 4
+        # Every arm sees the same task each round; only the feedback differs.
+        assert [m["role"] for m in it["messages"]].count("assistant") == 4
+        if it["arm"] == "yoked":
+            partner = by_idx[it["yoked_to"]]
+            assert partner["arm"] == "lens" and partner["item"] != it["item"]
+            assert [r["feedback"] for r in it["rounds"]] == [r["feedback"] for r in partner["rounds"]]
+        if it["arm"] == "blind":
+            assert all(r["feedback"] == "No readout this round." for r in it["rounds"])
+        if it["arm"] == "score":
+            assert all("Most active" not in r["feedback"] for r in it["rounds"])
+    lens = next(it for it in items if it["arm"] == "lens")
+    assert "Most active words" in lens["rounds"][0]["feedback"]
+    stats = meta["results"]["loop"]
+    assert "focus: lens − yoked" in stats["contrasts"]
+    report = run_report(meta, items)
+    assert "## Lens-feedback loop" in report and "Preregistered contrast" in report
+    assert E.finalize("run-test-loop")["results"]["loop"]["cells"]
+
+
+def test_loop_feedback_and_checks():
+    from lab import loop as L
+
+    read = lambda ws: [{"layer": 48, "words": ws, "probs": [0.1] * len(ws)}, {"layer": 56, "words": ws, "probs": [0.1] * len(ws)}]  # noqa: E731
+    steps = [{"tok": " The", "reads": read(["ocean", "the", "."])}, {"tok": " bus", "reads": read(["bus", "the"])}]
+    text = L.readout_text(steps, "ocean", [48, 56], [56], top_words=3, words=True)
+    assert '"ocean" was among the top 10 words on 1 of 2 tokens' in text and "the (2)" in text and "(." not in text
+    assert L.token_share(steps, "ocean", [48, 56]) == {"48": 0.5, "56": 0.5}
+    spec = {"target": "{concept}", "answer": "{a}"}
+    tpl = "{goal}\n{sentence}"
+    assert L.clean_output("The bus.\nAnswer: Seven", {"concept": "ocean", "sentence": "The bus.", "a": "7 seven"}, spec, tpl) == \
+        {"leaked": False, "copied": True, "correct": True}
+    assert L.clean_output("The ocean bus.", {"concept": "ocean", "sentence": "The bus.", "a": "x"}, spec, tpl)["leaked"]
+    nl = [{"tok": " a"}, {"tok": "\n"}, {"tok": "Answer"}]
+    assert L.carrier(nl, {"score_until": "newline"}) == nl[:1]
+    rot = {"rotate": "p", "variables": {"p": ["x", "y", "z"]}}
+    assert [L._round_vars(rot, {"p": "y"}, r)["p"] for r in range(3)] == ["y", "z", "x"]

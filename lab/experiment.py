@@ -51,6 +51,10 @@ def validate(spec: dict) -> list[str]:
         return ["The spec must be a YAML mapping."]
     if spec.get("kind") == "readout":
         return _validate_readout(spec)
+    if spec.get("kind") == "loop":
+        from .loop import validate as validate_loop
+
+        return validate_loop(spec)
     if not NAME.match(str(spec.get("name", ""))):
         errs.append("name: lowercase letters, digits and dashes, 2-60 characters.")
     prompt = spec.get("prompt") or {}
@@ -135,7 +139,7 @@ def list_experiments() -> list[dict]:
             "name": p.stem,
             "title": (spec or {}).get("title", p.stem),
             "description": (spec or {}).get("description", ""),
-            "n_conditions": len((spec or {}).get("conditions") or (spec or {}).get("tasks") or {}),
+            "n_conditions": len((spec or {}).get("conditions") or (spec or {}).get("tasks") or (spec or {}).get("goals") or {}),
             "kind": (spec or {}).get("kind", "prompted"),
             "n_items": n_items(spec or {}),
             "n_generations": n_generations(spec or {}),
@@ -150,6 +154,10 @@ def n_generations(spec: dict) -> int:
     """Generations in a full run: items times conditions, counting each wording."""
     if spec.get("kind") == "readout":
         return n_items(spec)
+    if spec.get("kind") == "loop":
+        from .loop import n_generations as loop_generations
+
+        return loop_generations(spec, n_items(spec)) if not validate(spec) else 0
     conds = spec.get("conditions") or {}
     per = sum(len(c["instruction"]) if isinstance(c, dict) and isinstance(c.get("instruction"), list) else 1
               for c in (conds.values() if isinstance(conds, dict) else []))
@@ -230,7 +238,12 @@ def finalize(run_id: str) -> dict:
     meta = store.load_run(run_id)
     spec = yaml.safe_load(meta["spec_raw"])
     items = store.load_run_items(run_id)
-    meta["results"] = aggregate(spec, items)
+    if spec.get("kind") == "loop":
+        from .loop import summarize
+
+        meta["results"] = summarize(spec, items)
+    else:
+        meta["results"] = aggregate(spec, items)
     meta["progress"]["done"] = len(items)
     if meta.get("status") != "complete":
         meta["status"] = "partial" if len(items) < meta["progress"]["total"] else "complete"
@@ -309,6 +322,24 @@ def _task_items(task: dict) -> list[dict]:
         name = p.stem.removeprefix("lens-eval-")
         items = [i for i in items if (name, i["name"]) in ok]
     return items
+
+
+async def readable_words(engine: Engine, targets) -> dict[str, bool]:
+    """Readouts are single tokens: a target that tokenizes into pieces can never be read out.
+    Scoring ignores case, so one single-token form is enough (" lotus" is two tokens, " Lotus" one).
+    A phrase target is visible only if every word is."""
+    one_token: dict[str, bool] = {}
+
+    async def readable(w: str) -> bool:
+        if w not in one_token:
+            one_token[w] = False
+            for form in dict.fromkeys([" " + w, w, " " + w.title(), w.title()]):
+                if len(await engine.tokenize_text(form)) == 1:
+                    one_token[w] = True
+                    break
+        return one_token[w]
+
+    return {t: all([await readable(w) for w in target_words(t)]) for t in sorted(targets)}
 
 
 async def run_readout(engine: Engine, name: str, raw: str, spec: dict, *, run_id: str, limit: int | None,
@@ -403,25 +434,7 @@ async def run_experiment(engine: Engine, name: str, raw: str, spec: dict, *, run
     }
     store.save_run(meta)
 
-    # Readouts are single tokens: a target that tokenizes into pieces can never be read out.
-    # Scoring ignores case, so one single-token form is enough (" lotus" is two tokens, " Lotus" one).
-    # A phrase target is visible only if every word is.
-    one_token: dict[str, bool] = {}
-
-    async def readable(w: str) -> bool:
-        if w not in one_token:
-            one_token[w] = False
-            for form in dict.fromkeys([" " + w, w, " " + w.title(), w.title()]):
-                if len(await engine.tokenize_text(form)) == 1:
-                    one_token[w] = True
-                    break
-        return one_token[w]
-
-    visible: dict[str, bool] = {}
-    for vals in combos:
-        t = spec["target"].format(**vals)
-        if t not in visible:
-            visible[t] = all([await readable(w) for w in target_words(t)])
+    visible = await readable_words(engine, {spec["target"].format(**vals) for vals in combos})
     vectors: dict[str, list[float]] = {}
     sem = asyncio.Semaphore(CONCURRENCY)
     done = 0

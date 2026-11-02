@@ -1,13 +1,16 @@
 # Mala Lab: notes for Claude
 
 A lab for workspace-lens experiments and contemplative practice in language models. Read
-`docs/HANDOFF.md` (current state and results), then `docs/VISION.md`. The current work is replicating the J++ focus/suppress result
-(`experiments/directed-modulation.yaml`) before anything new.
+`docs/HANDOFF.md` (current state and results), then `docs/SCOPE.md`, then `docs/VISION.md`. The
+current work is Path 1 in `docs/SCOPE.md`: does the model steer its own workspace better with
+its lens readout as feedback (`experiments/self-steer-*.yaml`, `lab/loop.py`)? SCOPE.md's
+hypotheses are preregistered: update their Status, don't edit them after seeing data.
 
 ## Layout
 
-- `experiments/*.yaml` are prompted lens experiments (conditions x items); `lab/experiment.py`
-  validates, runs and scores them. Runs live in `data/runs/<id>/{meta.json,items.jsonl,report.md}`.
+- `experiments/*.yaml` are lens experiments: prompted (conditions x items), readout, or loop
+  (rounds with lens feedback). `lab/experiment.py` and `lab/loop.py` validate, run and score
+  them; `python -m lab.cli run <name>` runs one without the app. Runs live in `data/runs/<id>/{meta.json,items.jsonl,report.md}`.
 - `practices/*.yaml` is the sit protocol. Its sha256 is recorded on every sit. Don't edit a
   locked practice; add a new version file instead (`mala-sit-v2.yaml`).
 - `lab/engine/` holds the engine interface, `interp.py` (interp-engine HTTP client: `/v1/lens`,
@@ -34,4 +37,5 @@ A lab for workspace-lens experiments and contemplative practice in language mode
     pip install -r requirements.txt
     python -m pytest -q tests
     uvicorn lab.server:app --reload --port 8080
+    python -m lab.cli run self-steer-focus --limit 4        # simulated engine
     python tools/build_preview.py out/mala-lab-preview.html

@@ -1,0 +1,127 @@
+# Scope: proving self-steering
+
+This is the charter for the research. Humans and agents doing automated research in this repo
+read it before choosing what to run next, and update the **Status** column, not the hypotheses,
+as results come in. Change a hypothesis only in a new dated entry under **Changes**, never
+after seeing the data it would be tested on.
+
+## Goal
+
+Show that a language model can **steer its own internal state** better when it can see that
+state. Concretely: give the model a readout of its own workspace (the J++ Jacobian lens) between
+attempts, and test whether it then controls what is active inside it, and does better at tasks
+that depend on that control, compared with the same loop without the readout.
+
+"Self-steering" here means: the model changes what is represented in its residual stream
+(read by the lens and by a second, held-out instrument), in the direction it was asked, **without
+changing what it writes**. Saying the word out loud doesn't count. Neither does trying again.
+
+## Why this might be true, and why it might not
+
+- For: instructed modulation already works open-loop. Told to think about a concept while
+  copying, Qwen3.6-27B puts it in the L56 top-10 on 19% of copied tokens; told not to, a few
+  percent (run-20261018-183502-b064). There is headroom in both directions, and a readout is
+  information the model doesn't otherwise have.
+- Against: work so far on hidden targets says models don't reliably control internal states
+  from feedback, and feedback hasn't beaten instruction (see `docs/VISION.md`, "Guard against").
+  A readout that names words may just prime them. A null at 27B is the base rate.
+
+## Path 1: the lens as feedback (now)
+
+Each item runs for several rounds. Between rounds the **arm** sets the feedback message:
+
+| Arm | Feedback | Controls for |
+|---|---|---|
+| `lens` | its own readout: target count at L48/L56 and the most active words | (the treatment) |
+| `yoked` | a real readout in the same format from another lens-arm attempt (same concept, other sentence, same round) | seeing the words and numbers, without information about this attempt |
+| `score` | its own target count only, no words | whether a scalar is enough |
+| `blind` | "No readout this round." | trying again, the extra turns |
+
+Round 1 is identical in every arm: each item's own baseline, and the "steering without the lens"
+condition. A `none` goal (no instruction) is the floor. All arms get the same system message,
+which says some readouts in the study come from other attempts, so the yoked arm isn't deceived.
+
+Code: `lab/loop.py` (`kind: loop` specs). Run with `python -m lab.cli run <name>` or from the app.
+
+## Hypotheses (preregistered)
+
+Primary metric unless stated: change in target **token share** (fraction of scored tokens with
+the target in the lens top-10), mean of L48 and L56, from round 1 to the last round. Contrasts
+are paired by item, 95% bootstrap CI with a fixed seed. Computed by `loop_stats` and printed in
+the run report.
+
+| # | Hypothesis | Test | Evidence for | Status |
+|---|---|---|---|---|
+| H1a | Lens feedback helps hold a concept | `self-steer-focus`, focus: lens − yoked | CI above 0 | not run |
+| H1b | Lens feedback helps keep it out | `self-steer-focus`, suppress: lens − yoked | CI below 0 | not run |
+| H1c | It is not just repetition | lens − blind, both goals | as H1a/b | not run |
+| H1d | It is not lens-gaming | the same contrasts at L40, never shown to the model | same sign, CI excludes 0 | not run |
+| H1e | Outputs stay clean | copied ≥ 90% and leaked ≤ 5% in every arm and round | | not run |
+| H2a | Lens feedback helps hold a hidden answer | `self-steer-hidden-answer`, solve: lens − yoked | CI above 0 | not run |
+| H2b | And makes the model more accurate | accuracy, rounds 2-4, lens vs yoked and blind | lens higher, CI excludes 0 | not run |
+
+**Self-steering is demonstrated** at this stage only if H1a, H1b, H1d and H1e all hold. H1a alone
+could be "say it more" leaking inward; bidirectional control with a held-out layer and clean
+outputs is the minimum. H2b is the step from control to use.
+
+**Kill criteria for Path 1.** If a full `self-steer-focus` run gives lens ≈ yoked in both
+directions (CIs overlapping 0 with half-width under 3 points), the readout as built carries
+nothing the model can use. Try one redesign (below), then stop and write it up as a null.
+
+## Running order
+
+1. **Pilot** `self-steer-focus` with `--limit 20` (20 items × 9 goal-arm cells × 4 rounds = 720
+   generations). Manipulation checks only: copied and leaked rates, that round 1 matches across
+   arms, that feedback reads sensibly in the transcripts. Don't test hypotheses on the pilot.
+2. **Full** `self-steer-focus` (120 items, 4320 generations). Test H1a-e.
+3. **Pilot, then full** `self-steer-hidden-answer`. First check the ceiling: if `direct` accuracy
+   is low, the problems are too hard and H2b can't be read. Replace items until the ceiling is
+   ≥ 80% and round-1 `solve` accuracy is clearly below it (that gap is the room to improve).
+4. Then the next tests, in order of what a positive H1 would most need ruled out.
+
+## Next tests (not built yet)
+
+- **Held-out instrument.** Project the residual onto a concept vector (`/v1/capture`,
+  `concept_vector`) at each copied token. If the lens moves and the projection doesn't, the
+  model is gaming the lens. This is the strongest check on H1d and should come right after a
+  positive H1.
+- **Pushing out an injected thought.** Steer a concept in (the `Steer` support already exists)
+  and ask the model to keep it out, with and without the readout. Links to the mala sit's
+  release measure.
+- **Hidden target.** The model isn't told the concept; the readout gives only a score for an
+  unnamed target, and the model must find and hold it. Success here can only come through the
+  loop. Hard, and probably null at 27B, but it is the cleanest proof.
+- **Hold and switch.** Hold A for the first half of the copy, B for the second. Tests timing
+  control, not just presence.
+- **Two at once.** Hold two concepts; feedback on both.
+- **Provocation.** Suppress a concept while copying a sentence about it.
+- **The tool, for real.** v1 gives a readout every round. v2 offers `read_lens()` as a tool the
+  model can call or not. Do calls come when they would help? Does use improve over a session?
+- **Second model.** Rerun what works on a second open model with a lens (DeepSeek-V4-Flash is the
+  plan in `docs/VISION.md`) before claiming anything general.
+
+## Redesigns to try if Path 1 is null
+
+- Per-token readouts (which words lit up where) instead of totals.
+- More rounds (8), so there is time to find a strategy.
+- A short free-text plan between rounds, scored only on rounds where the plan doesn't name the
+  target (otherwise it's self-prompting, which is a different and weaker claim).
+- Feedback at the layers where the effect is largest in round 1, and held-out elsewhere.
+
+## Rules for automated research here
+
+- Read `docs/HANDOFF.md`, this file, and the latest reports before choosing a run.
+- Every run cites a spec whose header states what it tests and what would count against it,
+  written before the run. Pilots check manipulations; only full runs test hypotheses.
+- After a run, update **Status** above with the run id and the number, and add the run to
+  `docs/HANDOFF.md`. Negative and null results go in just the same.
+- Simulated runs test the pipeline only. Never put them in the Status column.
+- Don't start a GPU without the human's go-ahead. Budget: none set yet (pods are about $4/hour).
+- Don't change a primary metric or layer after seeing a run. Add a dated entry under Changes
+  and test it on new data.
+- Dual use: a model that learns to steer its workspace learns what defeats workspace monitoring.
+  Report that plainly alongside any positive result.
+
+## Changes
+
+- 2026-11-02: first version. Path 1, H1-H2, specs `self-steer-focus` and `self-steer-hidden-answer`.

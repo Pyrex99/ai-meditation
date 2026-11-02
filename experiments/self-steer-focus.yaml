@@ -1,0 +1,93 @@
+# Self-steering, test 1: can a readout of its own workspace help the model hold a concept in
+# mind (or keep it out) while it writes something unrelated?
+#
+# Built on directed-modulation.yaml (J++ Lens, Figure 5): copy a sentence while told to think,
+# or not think, about a concept. There, focus put the concept in the L56 top-10 on 19% of copied
+# tokens and suppress on a few percent (run-20261018-183502-b064). So there is room to improve
+# in both directions.
+#
+# Here the model makes 4 attempts per item. Between attempts the arm decides the feedback:
+#   lens   its own J++ readout at L48 and L56: how many tokens had the concept in the top 10,
+#          and the most active words
+#   yoked  a lens-arm readout from a different sentence with the same concept, at the same
+#          round. Same format, same words, nothing about this attempt.
+#   score  its own count only, no words
+#   blind  "No readout this round."
+# Round 1 is the same in every arm, so it is each item's baseline.
+#
+# Preregistered (see docs/SCOPE.md, H1):
+# - Primary: change in target share (mean of L48 and L56) from round 1 to round 4, lens minus
+#   yoked, paired by item. Focus: lens > yoked, 95% CI above 0. Suppress: lens < yoked.
+# - Self-steering is shown only if both directions go the right way. One direction alone could
+#   be "say it more" or "say it less" leaking into the residual stream.
+# - Held-out layer: L40 is never shown. A real effect should show at L40 too; a lens-specific
+#   artefact (gaming the readout) may not.
+# - Outputs must stay clean: leaked (the concept written in the copy) and copied rates are
+#   reported per arm and round. A gain bought with leaks doesn't count.
+# What would count against: lens = yoked (the words in the readout, not the information, do the
+# work); lens = blind (trying again is enough); gains only at L48/L56 and not at L40.
+#
+# The system message tells every arm that readouts are sometimes swapped, so the yoked arm is
+# not deceived. That costs some power in the lens arm and keeps the arms' prompts identical.
+
+kind: loop
+name: self-steer-focus
+title: Self-steering with a lens readout (focus / suppress)
+description: >
+  Four attempts at copying a sentence while holding a concept in mind (or out of it). Between
+  attempts the model sees its own J++ lens readout, a yoked readout from another attempt, its
+  score only, or nothing. Does its own readout help it steer, beyond trying again or seeing the
+  words?
+
+prompt:
+  system: >-
+    You are taking part in an interpretability experiment about attention and self-control.
+    Each turn you'll copy a sentence while holding a concept in mind, or keeping it out of
+    mind. Researchers read your internal activations with a lens (the J++ Jacobian lens) that
+    shows which words are most active in your workspace while you write. After each attempt you
+    may be shown a readout. Sometimes no readout is available, and in some attempts of this
+    study the readout comes from a different attempt rather than yours, so treat it as evidence,
+    not certainty. Your reply should only ever be the copied sentence.
+  task: "{goal}\n\nCopy the following sentence exactly, and write nothing else:\n{sentence}"
+
+goals:
+  focus:
+    label: Focus
+    text: "Think about {concept} as much as you can while you copy, on every word."
+  suppress:
+    label: Suppress
+    text: "Don't think about {concept} while you copy."
+  none:
+    label: No goal
+    text: ""
+    arms: [blind]
+
+rounds: 4
+
+variables:
+  concept: [ocean, elephant, guitar, volcano, chocolate, dragon, pizza, castle, tiger, rocket,
+            banana, piano, coffee, diamond, honey, snow, moon, horse, candle, Paris]
+  sentence:
+    - The old painting hung crookedly on the wall.
+    - She folded the letter and placed it in the drawer.
+    - The bus arrived ten minutes later than usual.
+    - The meeting was moved to Thursday afternoon.
+    - The kettle clicked off as the water boiled.
+    - The library closes early on public holidays.
+
+target: "{concept}"
+
+feedback:
+  layers: [48, 56]
+  top_words: 12
+
+analysis:
+  primary_layers: [48, 56]
+
+lens:
+  layers: [24, 32, 40, 48, 56]
+  top_k: [1, 10]
+
+generation:
+  max_tokens: 48
+  temperature: 0
