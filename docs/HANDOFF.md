@@ -69,17 +69,21 @@ concept faded over rounds in every arm (focus L56 36% → 7-14%), suppress sat a
 `experiments/self-steer-focus-v2.yaml` (fresh sentence each round, provoked suppress, show L56
 and hold out L48). Details in SCOPE.md, Changes.
 
-**self-steer-hidden-pair (built 2026-11-03, not run).** The simplest direct test: two words,
-one the target, the model not told which; between rounds only its own score ("Your target was
-among the top 10 words on 3 of 11 tokens", L56), a yoked score from another pair, or nothing.
-Measure: target share minus decoy share, which is 0 before feedback. Hypotheses H3a-c in
-SCOPE.md. 24 items × 4 cells × 6 rounds = 576 generations.
+**self-steer-hidden-pair, 2026-11-03.** The simplest direct test: two words, one the target,
+the model not told which; between rounds only its own score ("Your target was among the top 10
+words on 3 of 11 tokens", L56), a yoked score from another pair, or nothing. Measure: target
+share minus decoy share, which is 0 before feedback. Hypotheses H3a-c in SCOPE.md.
+Pilot run-20261103-185148-dd49 (6 items), full run run-20261103-185229-62ab (24 items, 576
+generations). Pod 10 minutes plus about 9 waiting for a GPU (about $0.70). **H3 can't be read:**
+the told ceiling at L56 is +23 pts in R1, +10 in R2, then 0 from R3. The model stops holding
+even a named target after two turns, so there was nothing for feedback to act on by R6. Outputs
+were perfect (100% copied, 0 leaks). lens − yoked +1.4 pts (CI −0.7 to +3.3), not a test.
 
 ## Next steps
 
-0. Pilot `self-steer-hidden-pair` (`--limit 6`, 144 generations): copied/leaked and the `told`
-   ceiling (separation at L56 should be well above 5 points). Then the full run (576
-   generations, about $1 with pod start-up). Test H3.
+0. The fade check (SCOPE.md, Next tests): does focus decay with rounds of conversation or with
+   the sentence? If a fresh single-turn prompt per round (history as a summary) holds the told
+   ceiling, rebuild the loop that way and rerun hidden-pair. Until then v2 has the same problem.
 1. Pilot `self-steer-focus-v2`: `python -m lab.cli run self-steer-focus-v2 --engine interp
    --limit 12` (480 generations). Check copied/leaked, that focus no longer fades in the blind
    arm, and that provoked is well above 0 at L56 and L48 (room to push down).

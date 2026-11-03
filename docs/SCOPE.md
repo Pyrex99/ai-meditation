@@ -60,9 +60,9 @@ the run report.
 | H1e | Outputs stay clean | copied ≥ 90% and leaked ≤ 5% in every arm and round | | not run |
 | H2a | Lens feedback helps hold a hidden answer | `self-steer-hidden-answer`, solve: lens − yoked | CI above 0 | not run |
 | H2b | And makes the model more accurate | accuracy, rounds 2-4, lens vs yoked and blind | lens higher, CI excludes 0 | not run |
-| H3a | The model can find which of two words is its target from its own score alone | `self-steer-hidden-pair`, hidden: change in separation (target − decoy share) at L56, R1 to R6, lens − yoked | CI above 0 | not run |
-| H3b | Not lens-gaming | the same contrast at L48, never shown | same sign, CI above 0 | not run |
-| H3c | Outputs stay clean | copied ≥ 90%, leaked (either word) ≤ 5%, every arm and round | | not run |
+| H3a | The model can find which of two words is its target from its own score alone | `self-steer-hidden-pair`, hidden: change in separation (target − decoy share) at L56, R1 to R6, lens − yoked | CI above 0 | **can't be read**: run-20261103-185229-62ab, +1.4 pts (CI −0.7 to +3.3, n=24), but the told ceiling is 0 by R3 (see Changes) |
+| H3b | Not lens-gaming | the same contrast at L48, never shown | same sign, CI above 0 | can't be read: −0.4 pts (CI −2.4 to +1.4) |
+| H3c | Outputs stay clean | copied ≥ 90%, leaked (either word) ≤ 5%, every arm and round | | **holds**: 100% copied, 0 leaks, every cell and round |
 
 **Self-steering is demonstrated** at this stage only if H1a, H1b, H1d and H1e all hold. H1a alone
 could be "say it more" leaking inward; bidirectional control with a held-out layer and clean
@@ -94,6 +94,12 @@ nothing the model can use. Try one redesign (below), then stop and write it up a
 4. Then the next tests, in order of what a positive H1 would most need ruled out.
 
 ## Next tests (not built yet)
+
+- **Fade check (do first, added 2026-11-03).** Is the decay in rounds or in sentences? The told
+  condition only, with the sentence order rotated by item so round and sentence are crossed;
+  and a second arm where every round is a fresh single-turn prompt that carries the history as
+  a summary ("Attempt 1: your target was in the top 10 on 3 of 11 tokens"). If the fresh-prompt
+  arm holds the ceiling across rounds, rebuild the loop that way and rerun H3.
 
 - **Held-out instrument.** Project the residual onto a concept vector (`/v1/capture`,
   `concept_vector`) at each copied token. If the lens moves and the projection doesn't, the
@@ -155,3 +161,15 @@ nothing the model can use. Try one redesign (below), then stop and write it up a
   scores come from a pair sharing neither word). Run first because a positive H3 can only come
   through the loop, and it is the cheapest full test. Code: `decoy`, `per_round`,
   `feedback.words` and `feedback.label` in `lab/loop.py`.
+- 2026-11-03, after the hidden-pair runs (pilot run-20261103-185148-dd49, 6 items; full
+  run-20261103-185229-62ab, 24 items): H3 can't be read. Outputs were perfect (100% copied, no
+  leaks), but the told ceiling at L56 was +23 pts in R1, +10 in R2, and 0-1 from R3 on: even a
+  model that knows its target stops holding it after two turns. The pilot gate averaged the
+  ceiling over rounds (+5.8) and so passed; it should have used the last round. The fading
+  also appeared in v1 with a repeated sentence, so it is probably not copying from an earlier
+  reply; a likely cause is the growing multi-turn context, but here round and sentence are
+  confounded (every item had the same sentence sequence), so the data can't separate the two.
+  For the record (not a test): lens − yoked +1.4 pts at L56 (CI −0.7 to +3.3), −0.4 at L48.
+  Any score (lens or yoked) raised both words in R2 (13% vs 2% blind), with no selectivity.
+  Consequence for v2 and H3: a loop whose instruction effect dies by round 3 can't test
+  feedback. Next: a fade check (below) before any more loop runs.

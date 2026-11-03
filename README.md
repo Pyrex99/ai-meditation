@@ -1,8 +1,8 @@
 # Mala Lab: can a model steer itself if it can see inside itself?
 
 **Status: work in progress, not yet successful.** The measuring instrument has been checked
-against published results. The self-steering experiments are built and haven't been run on a
-real model yet. Nothing here shows self-steering so far.
+against published results. Two self-steering pilots and one full run have been done on the
+real model. Nothing here shows self-steering so far.
 
 ## The question
 
@@ -31,7 +31,7 @@ The full research plan, the hypotheses and what would count against them are in
 | Lens readout replication (496 published items) | recall@10 at best layer **55.5%** vs published 55.2% | `run-20261018-190939-86bb` |
 | Focus / suppress replication (instructed, no feedback) | focus rises to 90% of items (19% of tokens) in the L56 top-10, suppress 13%, neutral 6%. Shape replicates, levels are higher than published | `run-20261018-183502-b064` |
 | Silent mantra / recitation (hold a word while writing beads) | mostly null: the word shows on the first and last beads only | `run-20261018-224717-6b69` and earlier |
-| **Self-steering with lens feedback** | **built, not run** | `experiments/self-steer-*.yaml` |
+| **Self-steering with lens feedback** | **not shown yet.** Outputs stay clean, but the effect of the instruction fades by round 3 even when the model is told the target, so the loop has had nothing to work on | `run-20261103-185229-62ab`, `run-20261102-203853-c7ae` |
 
 Model: Qwen3.6-27B with the released J++ lens, served by
 [interp-engine](https://github.com/decoderesearch/interp-engine) on a rented GPU. Reports for every
