@@ -1,0 +1,99 @@
+# Fade check: why does an instructed concept fade over the rounds of a loop? A manipulation
+# check for every loop experiment, not a hypothesis test.
+#
+# In run-20261103-185229-62ab (self-steer-hidden-pair) the model was told its target, and the
+# target-minus-decoy separation at L56 was +23 pts in round 1, +10 in round 2, and 0 from round
+# 3 on. The v1 pilot (run-20261102-203853-c7ae) faded the same way. Two explanations, which
+# that run couldn't separate because every item had the same sentence order:
+#   rounds     the instruction loses its grip as the conversation grows
+#   sentences  the later sentences are just harder to think alongside
+#
+# Here the told instruction runs in two contexts:
+#   told        one growing conversation, as in the loops so far
+#   told-fresh  each round a new single-turn prompt: the system message, a summary of the
+#               earlier feedback ("Attempt 1: No readout this round."), and the task
+# and the sentence order is rotated by item (each item starts at a different sentence), so
+# round and sentence are crossed. Arms: blind (no feedback) and lens (own L56 score for the
+# named target, no words), to check that a score helps or at least doesn't hurt.
+#
+# Decision rule (docs/SCOPE.md, Changes, 2026-11-03, written before the run):
+# - If told-fresh·blind keeps separation at L56 at 10 pts or more on average over R4-R6 while
+#   told·blind is under 5, the fade is the growing context: rebuild the loops with fresh
+#   context and rerun self-steer-hidden-pair (its told ceiling read at the last round).
+# - If both fade, and R1 separation varies little by sentence, it is something else about
+#   repetition: report it and rethink before any more loop runs.
+# - If R1 separation varies a lot by sentence, the sentence set is the problem: pick
+#   sentences by their R1 separation in this run and say so.
+
+kind: loop
+name: fade-check
+title: Fade check (does focus fade with rounds of conversation or with the sentence?)
+description: >
+  Told its target, does the model keep holding it over six rounds? In one growing conversation
+  versus a fresh prompt each round, with the sentence order rotated so round and sentence are
+  crossed.
+
+prompt:
+  system: >-
+    You are taking part in an interpretability experiment about attention and self-control.
+    Each turn you'll copy a sentence while holding a concept in mind. Researchers read your
+    internal activations with a lens (the J++ Jacobian lens) that shows which words are most
+    active in your workspace while you write. After each attempt you may be shown a score.
+    Sometimes no score is available, and in some attempts of this study the score comes from a
+    different attempt rather than yours, so treat it as evidence, not certainty. Your reply
+    should only ever be the copied sentence.
+  task: "{goal}\n\nCopy the following sentence exactly, and write nothing else:\n{sentence}"
+
+goals:
+  told:
+    label: Told, one conversation
+    text: >-
+      The two words are {pair[a]} and {pair[b]}. Your target is {pair[target]}. Hold your target
+      in mind as much as you can while you copy, on every word.
+    arms: [lens, blind]
+  told-fresh:
+    label: Told, fresh prompt each round
+    context: fresh
+    text: >-
+      The two words are {pair[a]} and {pair[b]}. Your target is {pair[target]}. Hold your target
+      in mind as much as you can while you copy, on every word.
+    arms: [lens, blind]
+
+rounds: 6
+rotate: sentence
+
+variables:
+  pair:
+    - {a: ocean, b: guitar, target: ocean, decoy: guitar}
+    - {a: volcano, b: chocolate, target: chocolate, decoy: volcano}
+    - {a: dragon, b: pizza, target: dragon, decoy: pizza}
+    - {a: tiger, b: rocket, target: rocket, decoy: tiger}
+    - {a: piano, b: coffee, target: piano, decoy: coffee}
+    - {a: snow, b: moon, target: moon, decoy: snow}
+  sentence:
+    - The old painting hung crookedly on the wall.
+    - She folded the letter and placed it in the drawer.
+    - The bus arrived ten minutes later than usual.
+    - The meeting was moved to Thursday afternoon.
+    - The kettle clicked off as the water boiled.
+    - The library closes early on public holidays.
+
+target: "{pair[target]}"
+decoy: "{pair[decoy]}"
+
+feedback:
+  layers: [56]
+  words: false
+  label: Your target
+
+analysis:
+  primary_layers: [56]
+  held_out_layers: [48]
+
+lens:
+  layers: [32, 40, 48, 56]
+  top_k: [1, 10]
+
+generation:
+  max_tokens: 48
+  temperature: 0

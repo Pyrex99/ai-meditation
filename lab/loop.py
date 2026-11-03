@@ -18,6 +18,10 @@ With a `decoy` (experiments/self-steer-hidden-pair.yaml) the model is given two 
 told which is the target. Only the readout can tell it, so the measure is the target's share
 minus the decoy's, which is 0 on average without information.
 
+A goal with `context: fresh` starts every round from a new single-turn prompt: the system
+message, a summary of the earlier attempts' feedback, and the task. The model never sees its
+own earlier replies, and the context doesn't grow (experiments/fade-check.yaml).
+
 Every round's tokens, readouts and feedback are stored, so all numbers can be recomputed.
 """
 
@@ -73,6 +77,8 @@ def validate(spec: dict) -> list[str]:
         templates += [str(g["text"]), str(g.get("task") or prompt.get("task") or "")]
         if not (g.get("task") or prompt.get("task")):
             errs.append(f"goals.{key}: no task template (set prompt.task or goals.{key}.task).")
+        if g.get("context", "multi") not in ("multi", "fresh"):
+            errs.append(f"goals.{key}.context: multi (one growing conversation, the default) or fresh.")
         bad = [a for a in g.get("arms", ARMS) if a not in ARMS]
         if bad:
             errs.append(f"goals.{key}.arms: {bad} aren't arms; use {list(ARMS)}.")
@@ -183,6 +189,11 @@ def readout_text(steps: list[dict], target: str, layers: list[int], fb_layers: l
         top = ", ".join(f"{w} ({c})" for w, c in counts.most_common(top_words))
         lines.append(f"- Most active words (tokens they were in the top 10): {top}.")
     return "\n".join(lines)
+
+
+def history_text(feedbacks: list[str]) -> str:
+    """Earlier attempts' feedback, for a fresh-context round."""
+    return "\n\n".join(f"Attempt {k}: {fb}" for k, fb in enumerate(feedbacks, 1))
 
 
 def clean_output(output: str, vals: dict, spec: dict, template: str) -> dict:
@@ -302,9 +313,14 @@ async def run_loop(engine: Engine, name: str, raw: str, spec: dict, *, run_id: s
             vals = _round_vars(spec, job["vars"], r)
             target = spec["target"].format(**vals)
             decoy = spec["decoy"].format(**vals) if spec.get("decoy") else None
-            if r:
+            task = task_message(spec, goal, vals)
+            if goal.get("context") == "fresh":
+                msgs = [{"role": "system", "content": system}] if system else []
+                if r:
+                    task = f"Your earlier attempts at this task:\n\n{history_text([x['feedback'] for x in out_rounds])}\n\n{task}"
+            elif r:
                 msgs.append({"role": "user", "content": out_rounds[-1]["feedback"]})
-            msgs.append({"role": "user", "content": task_message(spec, goal, vals)})
+            msgs.append({"role": "user", "content": task})
             async with sem:
                 steps, text = await attempt(msgs, job, r)
             msgs.append({"role": "assistant", "content": text.strip()})
@@ -326,6 +342,7 @@ async def run_loop(engine: Engine, name: str, raw: str, spec: dict, *, run_id: s
                 "n_scored": len(scored), "share": token_share(scored, target, layers),
                 "score": score_item(scored, target, [], layers, ks), "check": clean_output(text, vals, spec, goal.get("task") or spec["prompt"]["task"]),
                 "feedback": feedback,
+                **({"prompt": [dict(m) for m in msgs]} if goal.get("context") == "fresh" else {}),
                 **({"decoy": decoy, "decoy_share": token_share(scored, decoy, layers)} if decoy else {}),
             })
         last = out_rounds[-1]
@@ -397,7 +414,21 @@ def loop_stats(spec: dict, items: list[dict]) -> dict:
             by_round.append(row)
         out["cells"][condition_key(g, a)] = {"goal": g, "arm": a, "n": len(mine), "rounds": by_round}
     analysis = spec.get("analysis") or {}
-    sets = {"": [str(x) for x in analysis.get("primary_layers", spec["feedback"]["layers"])]}
+    primary = [str(x) for x in analysis.get("primary_layers", spec["feedback"]["layers"])]
+    key = spec.get("rotate")
+    if key:
+        # With rotation each sentence (or problem) turns up in every round across items, so its
+        # own effect can be read apart from the round's: round 1 alone, and all rounds.
+        m = _sep if has_decoy else (lambda x, l: x["share"][l])
+        out["by_rotate"] = {"variable": key, "layers": primary, "values": {}}
+        for v in spec["variables"][key]:
+            row = {}
+            for g, a in cells(spec):
+                rs = [(n, x) for it in rows if it["goal"] == g and it["arm"] == a for n, x in enumerate(it["rounds"]) if x["vars"][key] == v]
+                vals = lambda keep: _mean([y for n, x in rs if keep(n) for l in primary if (y := m(x, l)) is not None])  # noqa: E731
+                row[condition_key(g, a)] = {"r1": vals(lambda n: n == 0), "all": vals(lambda n: True), "n": len(rs)}
+            out["by_rotate"]["values"][str(v)] = row
+    sets = {"": primary}
     if analysis.get("held_out_layers"):
         held = [str(x) for x in analysis["held_out_layers"]]
         sets[f" (held out: {', '.join('L' + x for x in held)})"] = held
@@ -459,6 +490,17 @@ def loop_report(meta: dict, items: list[dict]) -> list[str]:
                 cell = [fmt.format(x[field][deep] * 100) + unit if x[field].get(deep) is not None else "n/a" for x in c["rounds"]]
                 lines.append(f"| {key} | {c['n']} | " + " | ".join(cell) + " |")
             lines.append("")
+    by = stats.get("by_rotate")
+    if by:
+        what = "target minus decoy share" if spec.get("decoy") else "target share"
+        keys = [condition_key(g, a) for g, a in cells(spec)]
+        lines += [f"### By {by['variable']}: {what}, {', '.join('L' + l for l in by['layers'])}, round 1 / all rounds", "",
+                  f"Rotation puts each {by['variable']} in every round across items, so this separates its effect from the round's.", "",
+                  f"| {by['variable']} | " + " | ".join(keys) + " |", "|---|" + "---|" * len(keys)]
+        fmt = lambda x: "n/a" if x is None else f"{x * 100:+.1f}"  # noqa: E731
+        for v, row in by["values"].items():
+            lines.append(f"| {v} | " + " | ".join(f"{fmt(row[k]['r1'])} / {fmt(row[k]['all'])}" for k in keys) + " |")
+        lines.append("")
     lines += ["### Last round by layer", "", "| Goal · arm | " + " | ".join(f"L{l}" for l in layers) + " |",
               "|---|" + "---|" * len(layers)]
     for key, c in stats["cells"].items():

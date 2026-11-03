@@ -306,3 +306,30 @@ def test_loop_hidden_pair_scores_separation():
     assert "Target minus decoy share by round, L56" in report
     assert L.clean_output("The ocean.", {"pair": {"target": "guitar", "decoy": "ocean"}, "sentence": "The x."},
                           spec, spec["prompt"]["task"])["leaked"]
+
+
+def test_fade_check_fresh_context_and_rotation():
+    from lab import experiment as E
+    from lab import loop as L
+
+    raw, spec = E.load("fade-check")
+    assert E.validate(spec) == []
+    assert E.n_generations(spec) == 36 * 4 * 6
+    meta = asyncio.run(L.run_loop(SimEngine(), spec["name"], raw, spec, run_id="run-test-fade",
+                                  limit=None, seed=1, cancel=asyncio.Event()))
+    items = store.load_run_items("run-test-fade")
+    fresh = next(it for it in items if it["condition"] == "told-fresh·lens")
+    multi = next(it for it in items if it["condition"] == "told·lens" and it["item"] == fresh["item"])
+    last = fresh["rounds"][-1]["prompt"]
+    # A fresh round is one system and one user message, with the earlier feedback summarised.
+    assert [m["role"] for m in last] == ["system", "user", "assistant"]
+    assert "Attempt 5: Lens readout" in last[1]["content"] and "Attempt 6" not in last[1]["content"]
+    assert [m["role"] for m in multi["messages"]].count("assistant") == 6
+    # Rotation: across items, each sentence turns up in round 1.
+    starts = {it["rounds"][0]["vars"]["sentence"] for it in items if it["condition"] == "told·blind"}
+    assert starts == set(spec["variables"]["sentence"])
+    by = meta["results"]["loop"]["by_rotate"]
+    assert set(by["values"]) == set(spec["variables"]["sentence"])
+    report = "\n".join(L.loop_report(meta, items))
+    assert "### By sentence" in report
+    assert any("context" in e for e in L.validate({**spec, "goals": {"x": {"text": "", "context": "odd"}}}))

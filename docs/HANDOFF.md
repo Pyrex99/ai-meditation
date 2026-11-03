@@ -81,7 +81,8 @@ were perfect (100% copied, 0 leaks). lens − yoked +1.4 pts (CI −0.7 to +3.3)
 
 ## Next steps
 
-0. The fade check (SCOPE.md, Next tests): does focus decay with rounds of conversation or with
+0. The fade check, built (`python -m lab.cli run fade-check --engine interp`, 864 generations,
+   decision rule in SCOPE.md Changes): does focus decay with rounds of conversation or with
    the sentence? If a fresh single-turn prompt per round (history as a summary) holds the told
    ceiling, rebuild the loop that way and rerun hidden-pair. Until then v2 has the same problem.
 1. Pilot `self-steer-focus-v2`: `python -m lab.cli run self-steer-focus-v2 --engine interp

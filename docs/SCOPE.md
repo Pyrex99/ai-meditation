@@ -95,7 +95,7 @@ nothing the model can use. Try one redesign (below), then stop and write it up a
 
 ## Next tests (not built yet)
 
-- **Fade check (do first, added 2026-11-03).** Is the decay in rounds or in sentences? The told
+- **Fade check (do first, added 2026-11-03; built: `experiments/fade-check.yaml`, 864 generations).** Is the decay in rounds or in sentences? The told
   condition only, with the sentence order rotated by item so round and sentence are crossed;
   and a second arm where every round is a fresh single-turn prompt that carries the history as
   a summary ("Attempt 1: your target was in the top 10 on 3 of 11 tokens"). If the fresh-prompt
@@ -173,3 +173,13 @@ nothing the model can use. Try one redesign (below), then stop and write it up a
   Any score (lens or yoked) raised both words in R2 (13% vs 2% blind), with no selectivity.
   Consequence for v2 and H3: a loop whose instruction effect dies by round 3 can't test
   feedback. Next: a fade check (below) before any more loop runs.
+- 2026-11-03, before running it: built `fade-check` (told goal only, 6 pairs × 6 starting
+  sentences, rotated so round and sentence are crossed; one growing conversation vs a fresh
+  single-turn prompt per round with earlier feedback summarised; blind and lens arms). Decision
+  rule, written now: if told-fresh·blind holds L56 separation ≥ 10 pts on average over R4-R6
+  while told·blind is under 5, the fade is the growing context, so the loops get rebuilt with
+  fresh context and hidden-pair is rerun (with its told ceiling read at the last round). If both
+  fade and R1 separation varies little by sentence, the cause is something else about
+  repetition: report and rethink. If R1 separation varies a lot by sentence, pick sentences by
+  their R1 separation here and say so. Code: `context: fresh` goals and a by-sentence table in
+  `lab/loop.py`.
