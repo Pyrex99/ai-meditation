@@ -69,8 +69,17 @@ concept faded over rounds in every arm (focus L56 36% → 7-14%), suppress sat a
 `experiments/self-steer-focus-v2.yaml` (fresh sentence each round, provoked suppress, show L56
 and hold out L48). Details in SCOPE.md, Changes.
 
+**self-steer-hidden-pair (built 2026-11-03, not run).** The simplest direct test: two words,
+one the target, the model not told which; between rounds only its own score ("Your target was
+among the top 10 words on 3 of 11 tokens", L56), a yoked score from another pair, or nothing.
+Measure: target share minus decoy share, which is 0 before feedback. Hypotheses H3a-c in
+SCOPE.md. 24 items × 4 cells × 6 rounds = 576 generations.
+
 ## Next steps
 
+0. Pilot `self-steer-hidden-pair` (`--limit 6`, 144 generations): copied/leaked and the `told`
+   ceiling (separation at L56 should be well above 5 points). Then the full run (576
+   generations, about $1 with pod start-up). Test H3.
 1. Pilot `self-steer-focus-v2`: `python -m lab.cli run self-steer-focus-v2 --engine interp
    --limit 12` (480 generations). Check copied/leaked, that focus no longer fades in the blind
    arm, and that provoked is well above 0 at L56 and L48 (room to push down).

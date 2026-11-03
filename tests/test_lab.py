@@ -271,3 +271,38 @@ def test_loop_v2_rotates_sentences_and_provokes():
     assert any("held out: L48" in k for k in meta["results"]["loop"]["contrasts"])
     bad = {**spec, "round_vars": {"provoke": "concept.missing"}}
     assert any("round_vars.provoke" in e for e in L.validate(bad))
+
+
+def test_loop_hidden_pair_scores_separation():
+    from lab import experiment as E
+    from lab import loop as L
+
+    raw, spec = E.load("self-steer-hidden-pair")
+    assert E.validate(spec) == []
+    assert E.n_generations(spec) == 24 * 4 * 6
+    meta = asyncio.run(L.run_loop(SimEngine(), spec["name"], raw, spec, run_id="run-test-pair",
+                                  limit=None, seed=1, cancel=asyncio.Event()))
+    items = store.load_run_items("run-test-pair")
+    by_idx = {it["i"]: it for it in items}
+    lens = next(it for it in items if it["arm"] == "lens")
+    fb = lens["rounds"][0]["feedback"]
+    # The score never names either word, and there is no word list.
+    assert "Your target was among" in fb and "Most active" not in fb
+    assert lens["vars"]["pair"]["a"] not in fb and lens["vars"]["pair"]["b"] not in fb
+    assert [r["vars"]["sentence"] for r in lens["rounds"]] == spec["per_round"]["sentence"]
+    assert "decoy_share" in lens["rounds"][0]
+    for it in items:
+        if it["arm"] == "yoked":
+            partner = by_idx[it["yoked_to"]]
+            mine = {it["vars"]["pair"]["a"], it["vars"]["pair"]["b"]}
+            assert partner["arm"] == "lens" and not mine & {partner["vars"]["pair"]["a"], partner["vars"]["pair"]["b"]}
+    # The two items of a pair get the same first prompt.
+    a, b = (it for it in items if it["arm"] == "blind" and it["goal"] == "hidden" and it["vars"]["pair"]["a"] == "ocean")
+    assert a["messages"][:2] == b["messages"][:2]
+    stats = meta["results"]["loop"]
+    assert "hidden: lens − yoked" in stats["contrasts"] and "hidden: lens − yoked (held out: L48)" in stats["contrasts"]
+    assert "sep" in stats["cells"]["hidden·lens"]["rounds"][0]
+    report = "\n".join(L.loop_report(meta, items))
+    assert "Target minus decoy share by round, L56" in report
+    assert L.clean_output("The ocean.", {"pair": {"target": "guitar", "decoy": "ocean"}, "sentence": "The x."},
+                          spec, spec["prompt"]["task"])["leaked"]

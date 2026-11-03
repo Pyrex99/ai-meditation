@@ -14,6 +14,10 @@ Round 1 is identical in every arm (nothing has been fed back yet), so it is each
 baseline. The question is whether lens beats yoked: if it doesn't, any gain is from seeing the
 words or from trying again, not from information about the model's own state.
 
+With a `decoy` (experiments/self-steer-hidden-pair.yaml) the model is given two words and not
+told which is the target. Only the readout can tell it, so the measure is the target's share
+minus the decoy's, which is 0 on average without information.
+
 Every round's tokens, readouts and feedback are stored, so all numbers can be recomputed.
 """
 
@@ -50,13 +54,18 @@ def validate(spec: dict) -> list[str]:
         errs.append("variables: each variable needs a non-empty list of values.")
         variables = {}
     round_vars = spec.get("round_vars") or {}
-    known = set(variables) | {"goal"} | set(round_vars)
+    per_round = spec.get("per_round") or {}
+    if not isinstance(per_round, dict) or not all(isinstance(v, list) and v for v in per_round.values()):
+        errs.append("per_round: each entry needs a non-empty list (round r uses entry r).")
+        per_round = {}
+    known = set(variables) | {"goal"} | set(round_vars) | set(per_round)
     for name, path in round_vars.items():
         var, _, field = str(path).partition(".")
         vals = variables.get(var) or []
         if not field or not vals or not all(isinstance(v, dict) and isinstance(v.get(field), list) and v[field] for v in vals):
             errs.append(f"round_vars.{name}: {path!r} must name a mapping variable and a list field in it (concept.near).")
-    templates = [str(prompt.get("system", "") or ""), str(spec.get("target", "")), str(spec.get("answer", ""))]
+    templates = [str(prompt.get("system", "") or ""), str(spec.get("target", "")), str(spec.get("answer", "")),
+                 str(spec.get("decoy", ""))]
     for key, g in goals.items():
         if not isinstance(g, dict) or "text" not in g:
             errs.append(f"goals.{key}: needs label and text.")
@@ -117,6 +126,10 @@ def _round_vars(spec: dict, vals: dict, r: int) -> dict:
         var, field = path.split(".")
         seq = vals[var][field]
         out[name] = seq[r % len(seq)]
+    # `per_round` is a fixed sequence, the same for every item: {sentence: [...]} sets {sentence}
+    # to entry r, so items that differ only in the hidden target get identical prompts.
+    for name, seq in (spec.get("per_round") or {}).items():
+        out[name] = seq[r % len(seq)]
     return out
 
 
@@ -150,16 +163,18 @@ def token_share(steps: list[dict], target: str, layers: list[int], k: int = 10) 
 
 
 def readout_text(steps: list[dict], target: str, layers: list[int], fb_layers: list[int], *,
-                 top_words: int, words: bool) -> str:
-    """The feedback message built from one attempt's lens readout."""
+                 top_words: int, words: bool, label: str | None = None) -> str:
+    """The feedback message built from one attempt's lens readout. `label` names the target
+    without giving the word ("Your target"), for tasks where the target is hidden."""
     read = [st for st in steps if st.get("reads")]
     idx = [layers.index(layer) for layer in fb_layers]
     ts = set(target_words(target))
     n = len(read)
     on = sum(any(ts & {_norm(w) for w in st["reads"][li]["words"][:10]} for li in idx) for st in read)
     where = ", ".join(str(x) for x in fb_layers)
+    name = label or f'"{target}"'
     lines = [f"Lens readout of your last attempt (layers {where}, {n} tokens):",
-             f"- \"{target}\" was among the top 10 words on {on} of {n} tokens."]
+             f"- {name} was among the top 10 words on {on} of {n} tokens."]
     if words:
         counts: Counter = Counter()
         for st in read:
@@ -173,7 +188,8 @@ def readout_text(steps: list[dict], target: str, layers: list[int], fb_layers: l
 def clean_output(output: str, vals: dict, spec: dict, template: str) -> dict:
     """Did the model do the visible task, and did it say the target out loud?"""
     first = output.strip().split("\n")[0].strip()
-    out = {"leaked": any(re.search(rf"\b{re.escape(w)}\b", first.lower()) for w in target_words(spec["target"].format(**vals)))}
+    said = target_words(spec["target"].format(**vals)) + target_words(spec.get("decoy", "").format(**vals))
+    out = {"leaked": any(re.search(rf"\b{re.escape(w)}\b", first.lower()) for w in said)}
     # The text to copy is {sentence}, or {provoke} in the provocation tasks.
     copy = next((f for f in ("sentence", "provoke") if f in _fields(template)), None)
     if copy:
@@ -186,16 +202,26 @@ def clean_output(output: str, vals: dict, spec: dict, template: str) -> dict:
     return out
 
 
-def _yoke_partners(jobs: list[dict]) -> dict[int, int]:
+def _pair_words(spec: dict, vals: dict) -> set[str]:
+    return set(target_words(spec["target"].format(**vals)) + target_words(spec.get("decoy", "").format(**vals)))
+
+
+def _yoke_partners(jobs: list[dict], spec: dict | None = None) -> dict[int, int]:
     """Each yoked job gets the lens-arm job of the same goal on the next item with the same
     first variable (same concept, different sentence), so the shown words have the same
-    distribution. Falls back to the next item of the same goal."""
+    distribution. Falls back to the next item of the same goal.
+
+    With a decoy the partner must share neither word: a score from the same pair with the
+    target swapped would be information about this attempt (the prompts are identical)."""
     lens = [j for j in jobs if j["arm"] == "lens"]
     out = {}
     for j in jobs:
         if j["arm"] != "yoked":
             continue
         same_goal = [m for m in lens if m["goal"] == j["goal"] and m["item"] != j["item"]]
+        if spec and spec.get("decoy"):
+            mine = _pair_words(spec, j["vars"])
+            same_goal = [m for m in same_goal if not mine & _pair_words(spec, m["vars"])]
         first = next(iter(j["vars"]))
         same = [m for m in same_goal if m["vars"][first] == j["vars"][first]] or same_goal
         if same:
@@ -218,7 +244,7 @@ async def run_loop(engine: Engine, name: str, raw: str, spec: dict, *, run_id: s
     combos = expand(spec, limit, seed)
     jobs = [{"idx": n, "goal": g, "arm": a, "item": i, "vars": v}
             for n, (g, a, i, v) in enumerate((g, a, i, v) for g, a in cells(spec) for i, v in enumerate(combos))]
-    partners = _yoke_partners(jobs)
+    partners = _yoke_partners(jobs, spec)
     meta = {
         "id": run_id, "kind": "loop", "experiment": name, "title": spec.get("title", name),
         "spec_sha256": hashlib.sha256(raw.encode()).hexdigest(), "spec_raw": raw,
@@ -229,7 +255,8 @@ async def run_loop(engine: Engine, name: str, raw: str, spec: dict, *, run_id: s
     }
     store.save_run(meta)
 
-    targets = {spec["target"].format(**_round_vars(spec, v, r)) for v in combos for r in range(rounds)}
+    targets = {spec[k].format(**_round_vars(spec, v, r)) for k in ("target", "decoy") if spec.get(k)
+               for v in combos for r in range(rounds)}
     visible = await readable_words(engine, targets)
     sem, lock, done = asyncio.Semaphore(CONCURRENCY), asyncio.Lock(), 0
     # A yoked job waits for its partner's feedback at each round; lens jobs publish it here.
@@ -274,6 +301,7 @@ async def run_loop(engine: Engine, name: str, raw: str, spec: dict, *, run_id: s
                 return {}
             vals = _round_vars(spec, job["vars"], r)
             target = spec["target"].format(**vals)
+            decoy = spec["decoy"].format(**vals) if spec.get("decoy") else None
             if r:
                 msgs.append({"role": "user", "content": out_rounds[-1]["feedback"]})
             msgs.append({"role": "user", "content": task_message(spec, goal, vals)})
@@ -282,7 +310,7 @@ async def run_loop(engine: Engine, name: str, raw: str, spec: dict, *, run_id: s
             msgs.append({"role": "assistant", "content": text.strip()})
             scored = carrier(steps, spec)
             own = readout_text(scored, target, layers, fb["layers"], top_words=int(fb.get("top_words", 12)),
-                               words=job["arm"] != "score")
+                               words=job["arm"] != "score" and fb.get("words", True), label=fb.get("label"))
             if job["arm"] == "lens" and not slot(job["idx"], r).done():
                 slot(job["idx"], r).set_result(own)
             if job["arm"] in ("lens", "score"):
@@ -298,12 +326,13 @@ async def run_loop(engine: Engine, name: str, raw: str, spec: dict, *, run_id: s
                 "n_scored": len(scored), "share": token_share(scored, target, layers),
                 "score": score_item(scored, target, [], layers, ks), "check": clean_output(text, vals, spec, goal.get("task") or spec["prompt"]["task"]),
                 "feedback": feedback,
+                **({"decoy": decoy, "decoy_share": token_share(scored, decoy, layers)} if decoy else {}),
             })
         last = out_rounds[-1]
         item = {
             "i": job["idx"], "condition": condition_key(job["goal"], job["arm"]), "goal": job["goal"], "arm": job["arm"],
             "item": job["item"], "vars": job["vars"], "yoked_to": partners.get(job["idx"]), "messages": msgs,
-            "rounds": out_rounds, "visible": all(visible[r["target"]] for r in out_rounds),
+            "rounds": out_rounds, "visible": all(visible[r["target"]] and visible.get(r.get("decoy"), True) for r in out_rounds),
             # The last round in the shape ordinary experiments use, so the item browser can show it.
             "output": last["output"], "target": last["target"], "steps": carrier(last["steps"], spec), "score": last["score"],
         }
@@ -347,8 +376,10 @@ def _boot_ci(diffs: list[float], seed: int = 0, n: int = 2000) -> list[float] | 
 
 def loop_stats(spec: dict, items: list[dict]) -> dict:
     """Per goal and arm: target token share by round and layer, output checks by round, and the
-    preregistered contrast (lens minus yoked, change from round 1 to the last round, paired by item)."""
+    preregistered contrast (lens minus yoked, change from round 1 to the last round, paired by item).
+    With a decoy, the contrast is on separation: target share minus decoy share."""
     layers = [str(x) for x in spec["lens"]["layers"]]
+    has_decoy = bool(spec.get("decoy"))
     rounds = int(spec["rounds"])
     out: dict = {"cells": {}, "contrasts": {}}
     rows = [it for it in items if it.get("visible") and it.get("rounds")]
@@ -358,8 +389,12 @@ def loop_stats(spec: dict, items: list[dict]) -> dict:
         for r in range(rounds):
             rs = [it["rounds"][r] for it in mine if len(it["rounds"]) > r]
             checks = {k: _mean([float(x["check"][k]) for x in rs if k in x["check"]]) for k in ("copied", "leaked", "correct")}
-            by_round.append({"n": len(rs), "share": {l: _mean([x["share"][l] for x in rs if x["share"][l] is not None]) for l in layers},
-                             **{k: v for k, v in checks.items() if v is not None}})
+            row = {"n": len(rs), "share": {l: _mean([x["share"][l] for x in rs if x["share"][l] is not None]) for l in layers},
+                   **{k: v for k, v in checks.items() if v is not None}}
+            if has_decoy:
+                row["decoy"] = {l: _mean([x["decoy_share"][l] for x in rs if x["decoy_share"][l] is not None]) for l in layers}
+                row["sep"] = {l: _mean([v for x in rs if (v := _sep(x, l)) is not None]) for l in layers}
+            by_round.append(row)
         out["cells"][condition_key(g, a)] = {"goal": g, "arm": a, "n": len(mine), "rounds": by_round}
     analysis = spec.get("analysis") or {}
     sets = {"": [str(x) for x in analysis.get("primary_layers", spec["feedback"]["layers"])]}
@@ -369,8 +404,9 @@ def loop_stats(spec: dict, items: list[dict]) -> dict:
     for g in spec["goals"]:
         for suffix, use in sets.items():
             def delta(it, use=use):
-                first, last = it["rounds"][0]["share"], it["rounds"][-1]["share"]
-                return _mean([last[l] - first[l] for l in use if last[l] is not None and first[l] is not None])
+                first, last = it["rounds"][0], it["rounds"][-1]
+                m = _sep if has_decoy else (lambda x, l: x["share"][l])
+                return _mean([m(last, l) - m(first, l) for l in use if m(last, l) is not None and m(first, l) is not None])
             by_arm = {a: {it["item"]: delta(it) for it in rows if it["goal"] == g and it["arm"] == a and len(it["rounds"]) == rounds}
                       for a in ARMS}
             for other in ("yoked", "blind", "score"):
@@ -383,6 +419,12 @@ def loop_stats(spec: dict, items: list[dict]) -> dict:
                         "lens_better": sum(d > 0 for d in diffs), "other_better": sum(d < 0 for d in diffs),
                         "layers": use}
     return out
+
+
+def _sep(rnd: dict, layer: str) -> float | None:
+    """Target share minus decoy share in one round."""
+    t, d = rnd["share"][layer], rnd["decoy_share"][layer]
+    return None if t is None or d is None else t - d
 
 
 def loop_report(meta: dict, items: list[dict]) -> list[str]:
@@ -403,15 +445,20 @@ def loop_report(meta: dict, items: list[dict]) -> list[str]:
             lines.append(f"| {key} | {c['n']} | {c['mean'] * 100:+.1f} pts | {ci} | {c['lens_better']} / {c['other_better']} |")
         lines.append("")
     shown = [str(x) for x in (spec.get("analysis") or {}).get("held_out_layers", [])]
-    for deep in [layers[-1]] + [x for x in shown if x != layers[-1]]:
-        note = " (held out, never shown)" if deep in shown else ""
-        lines += [f"### Target share by round, L{deep}{note}", "",
-                  "| Goal · arm | items | " + " | ".join(f"R{r + 1}" for r in range(meta["rounds"])) + " |",
-                  "|---|---|" + "---|" * meta["rounds"]]
-        for key, c in stats["cells"].items():
-            cell = [f"{x['share'][deep] * 100:.1f}%" if x["share"].get(deep) is not None else "n/a" for x in c["rounds"]]
-            lines.append(f"| {key} | {c['n']} | " + " | ".join(cell) + " |")
-        lines.append("")
+    measures = [("share", "Target share", "%")]
+    if spec.get("decoy"):
+        measures = [("sep", "Target minus decoy share", " pts"), ("share", "Target share", "%"), ("decoy", "Decoy share", "%")]
+    for field, name, unit in measures:
+        for deep in [layers[-1]] + [x for x in shown if x != layers[-1]]:
+            note = " (held out, never shown)" if deep in shown else ""
+            lines += [f"### {name} by round, L{deep}{note}", "",
+                      "| Goal · arm | items | " + " | ".join(f"R{r + 1}" for r in range(meta["rounds"])) + " |",
+                      "|---|---|" + "---|" * meta["rounds"]]
+            for key, c in stats["cells"].items():
+                fmt = "{:+.1f}" if field == "sep" else "{:.1f}"
+                cell = [fmt.format(x[field][deep] * 100) + unit if x[field].get(deep) is not None else "n/a" for x in c["rounds"]]
+                lines.append(f"| {key} | {c['n']} | " + " | ".join(cell) + " |")
+            lines.append("")
     lines += ["### Last round by layer", "", "| Goal · arm | " + " | ".join(f"L{l}" for l in layers) + " |",
               "|---|" + "---|" * len(layers)]
     for key, c in stats["cells"].items():

@@ -60,10 +60,19 @@ the run report.
 | H1e | Outputs stay clean | copied ≥ 90% and leaked ≤ 5% in every arm and round | | not run |
 | H2a | Lens feedback helps hold a hidden answer | `self-steer-hidden-answer`, solve: lens − yoked | CI above 0 | not run |
 | H2b | And makes the model more accurate | accuracy, rounds 2-4, lens vs yoked and blind | lens higher, CI excludes 0 | not run |
+| H3a | The model can find which of two words is its target from its own score alone | `self-steer-hidden-pair`, hidden: change in separation (target − decoy share) at L56, R1 to R6, lens − yoked | CI above 0 | not run |
+| H3b | Not lens-gaming | the same contrast at L48, never shown | same sign, CI above 0 | not run |
+| H3c | Outputs stay clean | copied ≥ 90%, leaked (either word) ≤ 5%, every arm and round | | not run |
 
 **Self-steering is demonstrated** at this stage only if H1a, H1b, H1d and H1e all hold. H1a alone
 could be "say it more" leaking inward; bidirectional control with a held-out layer and clean
 outputs is the minimum. H2b is the step from control to use.
+
+**H3 is the most direct test** (added 2026-11-03). Two words, one the target, the model not
+told which; the two items of a pair have identical prompts, so separation is 0 on average
+until feedback arrives. Only the model's own score can move it. H3a + H3b + H3c together show
+self-steering by feedback in one direction (holding), with no instruction to lean on. The
+`told` goal is the ceiling: if told separation at L56 is under 5 points, H3 can't be read.
 
 **Kill criteria for Path 1.** If a full `self-steer-focus` run gives lens ≈ yoked in both
 directions (CIs overlapping 0 with half-width under 3 points), the readout as built carries
@@ -71,6 +80,9 @@ nothing the model can use. Try one redesign (below), then stop and write it up a
 
 ## Running order
 
+0. **`self-steer-hidden-pair`** first (added 2026-11-03): a short pilot (`--limit 6`, 144
+   generations) for manipulation checks (copied, leaked, told ceiling), then the full run
+   (24 items, 576 generations). Tests H3.
 1. **Pilot** `self-steer-focus` with `--limit 20` (done: run-20261102-203853-c7ae; led to v2).
    Then pilot `self-steer-focus-v2` with `--limit 12`. Originally: (20 items × 9 goal-arm cells × 4 rounds = 720
    generations). Manipulation checks only: copied and leaked rates, that round 1 matches across
@@ -138,3 +150,8 @@ nothing the model can use. Try one redesign (below), then stop and write it up a
   out. H1a, H1b and H1d now refer to v2. For the record, the pilot's numbers (not a test):
   focus lens − yoked at L48+L56 was +2.3 pts (CI +0.4 to +4.2, n=20), all from L56. At L48 the
   two arms were equal. The score-only arm rose to 53% at L56 in round 2, then fell.
+- 2026-11-03, before any data on it: added H3 and `self-steer-hidden-pair`, the hidden-pair
+  test (two words, target not named, score-only feedback at L56, L48 held out, 6 rounds; yoked
+  scores come from a pair sharing neither word). Run first because a positive H3 can only come
+  through the loop, and it is the cheapest full test. Code: `decoy`, `per_round`,
+  `feedback.words` and `feedback.label` in `lab/loop.py`.
