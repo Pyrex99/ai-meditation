@@ -79,12 +79,17 @@ the told ceiling at L56 is +23 pts in R1, +10 in R2, then 0 from R3. The model s
 even a named target after two turns, so there was nothing for feedback to act on by R6. Outputs
 were perfect (100% copied, 0 leaks). lens − yoked +1.4 pts (CI −0.7 to +3.3), not a test.
 
+**run-20261105-204233-08c2, fade check (36 items × 4 cells × 6 rounds).** Pod about 10 minutes
+(about $0.65). Why did focus fade? The growing conversation. With the target named, L56
+separation over R4-R6 was +18 pts when each round was a fresh single-turn prompt, against +1.5
+in one conversation, for every sentence. Outputs perfect. In passing: its own score helped in
+fresh context (lens − blind +12.5 pts at L56, CI +8.0 to +17.6) but hardly at held-out L48
+(+2.2); no yoked arm, so not a test. Details in SCOPE.md, Changes.
+
 ## Next steps
 
-0. The fade check, built (`python -m lab.cli run fade-check --engine interp`, 864 generations,
-   decision rule in SCOPE.md Changes): does focus decay with rounds of conversation or with
-   the sentence? If a fresh single-turn prompt per round (history as a summary) holds the told
-   ceiling, rebuild the loop that way and rerun hidden-pair. Until then v2 has the same problem.
+0. Rebuild hidden-pair with `context: fresh` as a new spec (`self-steer-hidden-pair-v2.yaml`),
+   gate the pilot on the told ceiling at the last round, and run it. Then do the same for v2 focus.
 1. Pilot `self-steer-focus-v2`: `python -m lab.cli run self-steer-focus-v2 --engine interp
    --limit 12` (480 generations). Check copied/leaked, that focus no longer fades in the blind
    arm, and that provoked is well above 0 at L56 and L48 (room to push down).

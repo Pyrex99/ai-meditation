@@ -95,7 +95,7 @@ nothing the model can use. Try one redesign (below), then stop and write it up a
 
 ## Next tests (not built yet)
 
-- **Fade check (do first, added 2026-11-03; built: `experiments/fade-check.yaml`, 864 generations).** Is the decay in rounds or in sentences? The told
+- **Fade check (done 2026-11-05: run-20261105-204233-08c2, the growing context is the cause; see Changes).** Is the decay in rounds or in sentences? The told
   condition only, with the sentence order rotated by item so round and sentence are crossed;
   and a second arm where every round is a fresh single-turn prompt that carries the history as
   a summary ("Attempt 1: your target was in the top 10 on 3 of 11 tokens"). If the fresh-prompt
@@ -183,3 +183,14 @@ nothing the model can use. Try one redesign (below), then stop and write it up a
   repetition: report and rethink. If R1 separation varies a lot by sentence, pick sentences by
   their R1 separation here and say so. Code: `context: fresh` goals and a by-sentence table in
   `lab/loop.py`.
+- 2026-11-05, after the fade check (run-20261105-204233-08c2, 36 items × 4 cells × 6 rounds;
+  100% copied, 0 leaks): the fade is the growing context. Told separation at L56, mean of
+  R4-R6: fresh·blind +18.2 pts, one-conversation·blind +1.5 pts, so the decision rule's first
+  branch holds. R1 separation ranged +11 to +26 pts by sentence, but every sentence held in
+  fresh context and faded in one conversation. So all loops get rebuilt with `context: fresh`
+  (a new spec version each; the run specs stay as they are), starting with hidden-pair, its
+  told ceiling read at the last round. Seen in passing, not a preregistered test: with the
+  target named, its own score helped hold it in fresh context, lens − blind +12.5 pts at L56
+  (CI +8.0 to +17.6, 22/1 items), but only +2.2 at the held-out L48 (CI −0.1 to +4.6). There
+  is no yoked arm here, so this could be the score acting as a reminder; and the L56-only
+  pattern is what lens-gaming would look like. H3 on fresh context is the test.
