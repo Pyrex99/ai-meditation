@@ -31,7 +31,7 @@ The full research plan, the hypotheses and what would count against them are in
 | Lens readout replication (496 published items) | recall@10 at best layer **55.5%** vs published 55.2% | `run-20261018-190939-86bb` |
 | Focus / suppress replication (instructed, no feedback) | focus rises to 90% of items (19% of tokens) in the L56 top-10, suppress 13%, neutral 6%. Shape replicates, levels are higher than published | `run-20261018-183502-b064` |
 | Silent mantra / recitation (hold a word while writing beads) | mostly null: the word shows on the first and last beads only | `run-20261018-224717-6b69` and earlier |
-| **Self-steering with lens feedback** | **not shown yet.** Outputs stay clean, but the effect of the instruction fades by round 3 even when the model is told the target, so the loop has had nothing to work on | `run-20261103-185229-62ab`, `run-20261102-203853-c7ae` |
+| **Self-steering with lens feedback** | **not shown.** Outputs stay clean. Focus faded in long conversations (fixed with a fresh prompt each round, `run-20261105-204233-08c2`). With the fix, the model still couldn't use its own score to find which of two words was its target: a clean null (`run-20261125-115434-83a4`) | `run-20261125-115434-83a4` and earlier |
 
 Model: Qwen3.6-27B with the released J++ lens, served by
 [interp-engine](https://github.com/decoderesearch/interp-engine) on a rented GPU. Reports for every

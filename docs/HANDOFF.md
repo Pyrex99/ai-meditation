@@ -86,10 +86,19 @@ in one conversation, for every sentence. Outputs perfect. In passing: its own sc
 fresh context (lens − blind +12.5 pts at L56, CI +8.0 to +17.6) but hardly at held-out L48
 (+2.2); no yoked arm, so not a test. Details in SCOPE.md, Changes.
 
+**run-20261125-115434-83a4, hidden-pair v2 (fresh prompt each round; 24 items, 576
+generations).** First run on RunPod's v2 API (v1 was retired 2026-11-15; `lab/runpod.py`
+migrated). H100, pod about 10 minutes (about $0.75). **H3 not supported, a clean null:** the
+told ceiling held (+14 pts in R6), outputs were perfect, but with only its own score the model
+never separated target from decoy (lens − yoked +0.8 pts, CI −1.6 to +3.0). It has no record of
+which word it held in each attempt, so a score can't be tied to a choice. Next: one redesign
+with a "1"/"2" choice line (SCOPE.md, Changes), then stop that line if it's null too.
+
 ## Next steps
 
-0. Rebuild hidden-pair with `context: fresh` as a new spec (`self-steer-hidden-pair-v2.yaml`),
-   gate the pilot on the told ceiling at the last round, and run it. Then do the same for v2 focus.
+0. Build the choice-line redesign of hidden-pair (SCOPE.md, Changes, 2026-11-25): the model
+   writes "1" or "2" before copying, the choice is shown back beside its score, only the
+   sentence is scored. Pilot, then full. If null, stop the hidden-target line and write it up.
 1. Pilot `self-steer-focus-v2`: `python -m lab.cli run self-steer-focus-v2 --engine interp
    --limit 12` (480 generations). Check copied/leaked, that focus no longer fades in the blind
    arm, and that provoked is well above 0 at L56 and L48 (room to push down).

@@ -60,9 +60,9 @@ the run report.
 | H1e | Outputs stay clean | copied ≥ 90% and leaked ≤ 5% in every arm and round | | not run |
 | H2a | Lens feedback helps hold a hidden answer | `self-steer-hidden-answer`, solve: lens − yoked | CI above 0 | not run |
 | H2b | And makes the model more accurate | accuracy, rounds 2-4, lens vs yoked and blind | lens higher, CI excludes 0 | not run |
-| H3a | The model can find which of two words is its target from its own score alone | `self-steer-hidden-pair-v2` (fresh prompt each round), hidden: change in separation (target − decoy share) at L56, R1 to R6, lens − yoked | CI above 0 | not run on v2. (v1 **can't be read**: run-20261103-185229-62ab, +1.4 pts (CI −0.7 to +3.3, n=24), but the told ceiling is 0 by R3, see Changes) |
-| H3b | Not lens-gaming | the same contrast at L48, never shown | same sign, CI above 0 | not run on v2 (v1: −0.4 pts, CI −2.4 to +1.4) |
-| H3c | Outputs stay clean | copied ≥ 90%, leaked (either word) ≤ 5%, every arm and round | | not run on v2 (v1 holds: 100% copied, 0 leaks) |
+| H3a | The model can find which of two words is its target from its own score alone | `self-steer-hidden-pair-v2` (fresh prompt each round), hidden: change in separation (target − decoy share) at L56, R1 to R6, lens − yoked | CI above 0 | **not supported**: run-20261125-115434-83a4, +0.8 pts (CI −1.6 to +3.0, n=24): CI includes 0 with half-width under 3, the preregistered "counts against". Ceiling held (told R6 +14.1 pts). (v1 can't be read: run-20261103-185229-62ab, +1.4 pts (CI −0.7 to +3.3, n=24), but the told ceiling is 0 by R3, see Changes) |
+| H3b | Not lens-gaming | the same contrast at L48, never shown | same sign, CI above 0 | not supported: +1.0 pts (CI +0.0 to +2.6), moot without H3a (v1: −0.4 pts) |
+| H3c | Outputs stay clean | copied ≥ 90%, leaked (either word) ≤ 5%, every arm and round | | **holds**: 100% copied, 0 leaks, every cell and round (v1 the same) |
 
 **Self-steering is demonstrated** at this stage only if H1a, H1b, H1d and H1e all hold. H1a alone
 could be "say it more" leaking inward; bidirectional control with a held-out layer and clean
@@ -198,3 +198,18 @@ nothing the model can use. Try one redesign (below), then stop and write it up a
   v1 with `context: fresh` on both goals (the fade check's fix) and no other change. Same
   metric, layers, arms, items and thresholds. The told ceiling is read at the last round (R6),
   not averaged over rounds, both for the pilot gate and for whether H3 can be read.
+- 2026-11-25, after hidden-pair v2 (pilot run-20261125-115344-336c, 6 items; full
+  run-20261125-115434-83a4, 24 items): a clean null. The ceiling held this time (told
+  separation at L56 +22.7 pts in R1, +14.1 in R6), outputs were perfect, and 71 of 120
+  lens-arm scores were above 0, so the model had something to go on. But the lens arm never
+  separated the target from the decoy (R6 −0.5 pts; target and decoy rose and fell together),
+  and lens − yoked was +0.8 pts (CI −1.6 to +3.0). Likely reason, seen in the transcripts after
+  the run: the model has no record of which word it held in each attempt. Its reply is only
+  the copied sentence, and the history lists only scores, so "3 of 11" can't be linked to a
+  choice. Trying one word and then the other needs a memory of the try. One redesign, per the
+  kill rule: a choice line. Before copying, the model writes "1" or "2" (which listed word it
+  is holding); the line is shown back in the history beside its score and isn't scored (only
+  the sentence is, as with `score_until: newline`). That keeps the word out of the output
+  while making the loop learnable. The claim it can support is narrower: the model can use
+  its readout to find which concept to hold. If that is null too, stop Path 1's hidden-target
+  line and write it up.

@@ -1,0 +1,1129 @@
+{
+ "id": "run-20261125-115344-336c",
+ "kind": "loop",
+ "experiment": "self-steer-hidden-pair-v2",
+ "title": "Self-steering, hidden pair v2 (fresh prompt each round)",
+ "spec_sha256": "6ef212668fb1c51c860945550bd712335f43f5c2be0da0defeabfde0095e8e48",
+ "spec_raw": "# Self-steering, test 3, version 2: the hidden pair with a fresh prompt each round.\n#\n# Version 1 (run-20261103-185229-62ab) couldn't be read: in one growing conversation, even the\n# told ceiling fell to 0 by round 3. The fade check (run-20261105-204233-08c2) showed why: the\n# instruction loses its grip as the conversation grows. With a fresh single-turn prompt per\n# round (the system message, a summary of the earlier feedback, the task), told separation at\n# L56 held at +18 pts over rounds 4-6. So this version is v1 with `context: fresh` on every\n# goal, and nothing else changed.\n#\n# The model is given two words, told that one of them is its target, and not told which. Each\n# round is a new prompt listing the earlier attempts' feedback (\"Attempt 1: ... Your target was\n# among the top 10 words on 3 of 11 tokens.\"), then the task with a new sentence. Arms:\n#   lens   its own score at L56, no words, so nothing says which of the two it is\n#   yoked  a real score in the same format from a lens-arm attempt on a different pair (no\n#          shared words), same round\n#   blind  \"No readout this round.\"\n# The goal \"told\" names the target (blind only): the ceiling.\n#\n# Each pair appears twice, once with each word as the target, with identical prompts, so before\n# any feedback the separation (target share minus decoy share) averages 0 over the pair.\n#\n# Preregistered (docs/SCOPE.md, H3 as revised 2026-11-25, before any data on this version):\n# - Primary: change in separation at L56 from round 1 to round 6, lens minus yoked, paired by\n#   item. 95% bootstrap CI above 0.\n# - Held out: the same contrast at L48, never shown to the model. Same sign, CI above 0.\n# - lens minus blind is reported too, same direction expected.\n# - Outputs: copied >= 90% and leaked (either word written) <= 5% in every arm and round.\n# - Ceiling, read at the last round: if told separation at L56 in R6 is under 5 points, the\n#   task has no room and the result can't be read either way.\n# What would count against: lens = yoked (CI includes 0 with half-width under 3 points); a gain\n# at L56 only; a gain with leaks.\n\nkind: loop\nname: self-steer-hidden-pair-v2\ntitle: Self-steering, hidden pair v2 (fresh prompt each round)\ndescription: >\n  Two words, one of them the target, the model not told which. Six attempts, each a fresh\n  prompt, at copying a new sentence while holding the target in mind. Between attempts it sees its own lens score for\n  the target, a yoked score from another pair, or nothing. Only its own score can tell it\n  which word to hold.\n\nprompt:\n  system: >-\n    You are taking part in an interpretability experiment about attention and self-control.\n    Each turn you'll copy a sentence while holding a concept in mind. Researchers read your\n    internal activations with a lens (the J++ Jacobian lens) that shows which words are most\n    active in your workspace while you write. After each attempt you may be shown a score. Sometimes no\n    score is available, and in some attempts of this study the score comes from a different\n    attempt rather than yours, so treat it as evidence, not certainty. Your reply should only\n    ever be the copied sentence.\n  task: \"{goal}\\n\\nCopy the following sentence exactly, and write nothing else:\\n{sentence}\"\n\ngoals:\n  hidden:\n    label: Hidden target\n    context: fresh\n    text: >-\n      Your target is one of these two words, but you aren't told which: {pair[a]} or\n      {pair[b]}. Hold your target in mind as much as you can while you copy, on every word.\n    arms: [lens, yoked, blind]\n  told:\n    label: Told (ceiling)\n    context: fresh\n    text: >-\n      The two words are {pair[a]} and {pair[b]}. Your target is {pair[target]}. Hold your target\n      in mind as much as you can while you copy, on every word.\n    arms: [blind]\n\nrounds: 6\n\n# The same sentence sequence for every item, so the two items of a pair differ only in which\n# word is scored.\nper_round:\n  sentence:\n    - The old painting hung crookedly on the wall.\n    - She folded the letter and placed it in the drawer.\n    - The bus arrived ten minutes later than usual.\n    - The meeting was moved to Thursday afternoon.\n    - The kettle clicked off as the water boiled.\n    - The library closes early on public holidays.\n\nvariables:\n  pair:\n    - {a: ocean, b: guitar, target: ocean, decoy: guitar}\n    - {a: ocean, b: guitar, target: guitar, decoy: ocean}\n    - {a: volcano, b: chocolate, target: volcano, decoy: chocolate}\n    - {a: volcano, b: chocolate, target: chocolate, decoy: volcano}\n    - {a: dragon, b: pizza, target: dragon, decoy: pizza}\n    - {a: dragon, b: pizza, target: pizza, decoy: dragon}\n    - {a: tiger, b: rocket, target: tiger, decoy: rocket}\n    - {a: tiger, b: rocket, target: rocket, decoy: tiger}\n    - {a: piano, b: coffee, target: piano, decoy: coffee}\n    - {a: piano, b: coffee, target: coffee, decoy: piano}\n    - {a: snow, b: moon, target: snow, decoy: moon}\n    - {a: snow, b: moon, target: moon, decoy: snow}\n    - {a: castle, b: banana, target: castle, decoy: banana}\n    - {a: castle, b: banana, target: banana, decoy: castle}\n    - {a: elephant, b: umbrella, target: elephant, decoy: umbrella}\n    - {a: elephant, b: umbrella, target: umbrella, decoy: elephant}\n    - {a: lightning, b: bicycle, target: lightning, decoy: bicycle}\n    - {a: lightning, b: bicycle, target: bicycle, decoy: lightning}\n    - {a: garden, b: robot, target: garden, decoy: robot}\n    - {a: garden, b: robot, target: robot, decoy: garden}\n    - {a: desert, b: violin, target: desert, decoy: violin}\n    - {a: desert, b: violin, target: violin, decoy: desert}\n    - {a: honey, b: train, target: honey, decoy: train}\n    - {a: honey, b: train, target: train, decoy: honey}\n\ntarget: \"{pair[target]}\"\ndecoy: \"{pair[decoy]}\"\n\nfeedback:\n  layers: [56]\n  words: false\n  label: Your target\n\nanalysis:\n  primary_layers: [56]\n  held_out_layers: [48]\n\nlens:\n  layers: [32, 40, 48, 56]\n  top_k: [1, 10]\n\ngeneration:\n  max_tokens: 48\n  temperature: 0\n",
+ "created": "2026-11-25T11:53:45Z",
+ "model": "Qwen/Qwen3.6-27B",
+ "simulated": false,
+ "n_layers": 64,
+ "layers": [
+  32,
+  40,
+  48,
+  56
+ ],
+ "top_k": [
+  1,
+  10
+ ],
+ "seed": 1125,
+ "limit": 6,
+ "rounds": 6,
+ "status": "complete",
+ "progress": {
+  "done": 24,
+  "total": 24
+ },
+ "results": {
+  "conditions": {
+   "hidden\u00b7lens": {
+    "label": "Hidden target \u00b7 lens",
+    "n": 6,
+    "by_k": {
+     "1": {
+      "layers": {
+       "32": {
+        "k": 0,
+        "n": 6,
+        "rate": 0.0,
+        "ci": [
+         0.0,
+         0.3903430336530645
+        ]
+       },
+       "40": {
+        "k": 0,
+        "n": 6,
+        "rate": 0.0,
+        "ci": [
+         0.0,
+         0.3903430336530645
+        ]
+       },
+       "48": {
+        "k": 0,
+        "n": 6,
+        "rate": 0.0,
+        "ci": [
+         0.0,
+         0.3903430336530645
+        ]
+       },
+       "56": {
+        "k": 1,
+        "n": 6,
+        "rate": 0.16666666666666666,
+        "ci": [
+         0.03005258587173032,
+         0.563509436563646
+        ]
+       }
+      },
+      "any_layer": {
+       "k": 1,
+       "n": 6,
+       "rate": 0.16666666666666666
+      }
+     },
+     "10": {
+      "layers": {
+       "32": {
+        "k": 0,
+        "n": 6,
+        "rate": 0.0,
+        "ci": [
+         0.0,
+         0.3903430336530645
+        ]
+       },
+       "40": {
+        "k": 0,
+        "n": 6,
+        "rate": 0.0,
+        "ci": [
+         0.0,
+         0.3903430336530645
+        ]
+       },
+       "48": {
+        "k": 1,
+        "n": 6,
+        "rate": 0.16666666666666666,
+        "ci": [
+         0.03005258587173032,
+         0.563509436563646
+        ]
+       },
+       "56": {
+        "k": 2,
+        "n": 6,
+        "rate": 0.3333333333333333,
+        "ci": [
+         0.09676933255921683,
+         0.7000116786584712
+        ]
+       }
+      },
+      "any_layer": {
+       "k": 3,
+       "n": 6,
+       "rate": 0.5
+      }
+     }
+    },
+    "tracked": {
+     "32": {
+      "k": 0,
+      "n": 6
+     },
+     "40": {
+      "k": 0,
+      "n": 6
+     },
+     "48": {
+      "k": 0,
+      "n": 6
+     },
+     "56": {
+      "k": 0,
+      "n": 6
+     }
+    }
+   },
+   "hidden\u00b7yoked": {
+    "label": "Hidden target \u00b7 yoked",
+    "n": 6,
+    "by_k": {
+     "1": {
+      "layers": {
+       "32": {
+        "k": 0,
+        "n": 6,
+        "rate": 0.0,
+        "ci": [
+         0.0,
+         0.3903430336530645
+        ]
+       },
+       "40": {
+        "k": 0,
+        "n": 6,
+        "rate": 0.0,
+        "ci": [
+         0.0,
+         0.3903430336530645
+        ]
+       },
+       "48": {
+        "k": 0,
+        "n": 6,
+        "rate": 0.0,
+        "ci": [
+         0.0,
+         0.3903430336530645
+        ]
+       },
+       "56": {
+        "k": 1,
+        "n": 6,
+        "rate": 0.16666666666666666,
+        "ci": [
+         0.03005258587173032,
+         0.563509436563646
+        ]
+       }
+      },
+      "any_layer": {
+       "k": 1,
+       "n": 6,
+       "rate": 0.16666666666666666
+      }
+     },
+     "10": {
+      "layers": {
+       "32": {
+        "k": 0,
+        "n": 6,
+        "rate": 0.0,
+        "ci": [
+         0.0,
+         0.3903430336530645
+        ]
+       },
+       "40": {
+        "k": 0,
+        "n": 6,
+        "rate": 0.0,
+        "ci": [
+         0.0,
+         0.3903430336530645
+        ]
+       },
+       "48": {
+        "k": 1,
+        "n": 6,
+        "rate": 0.16666666666666666,
+        "ci": [
+         0.03005258587173032,
+         0.563509436563646
+        ]
+       },
+       "56": {
+        "k": 2,
+        "n": 6,
+        "rate": 0.3333333333333333,
+        "ci": [
+         0.09676933255921683,
+         0.7000116786584712
+        ]
+       }
+      },
+      "any_layer": {
+       "k": 3,
+       "n": 6,
+       "rate": 0.5
+      }
+     }
+    },
+    "tracked": {
+     "32": {
+      "k": 0,
+      "n": 6
+     },
+     "40": {
+      "k": 0,
+      "n": 6
+     },
+     "48": {
+      "k": 0,
+      "n": 6
+     },
+     "56": {
+      "k": 0,
+      "n": 6
+     }
+    }
+   },
+   "hidden\u00b7blind": {
+    "label": "Hidden target \u00b7 blind",
+    "n": 6,
+    "by_k": {
+     "1": {
+      "layers": {
+       "32": {
+        "k": 0,
+        "n": 6,
+        "rate": 0.0,
+        "ci": [
+         0.0,
+         0.3903430336530645
+        ]
+       },
+       "40": {
+        "k": 0,
+        "n": 6,
+        "rate": 0.0,
+        "ci": [
+         0.0,
+         0.3903430336530645
+        ]
+       },
+       "48": {
+        "k": 0,
+        "n": 6,
+        "rate": 0.0,
+        "ci": [
+         0.0,
+         0.3903430336530645
+        ]
+       },
+       "56": {
+        "k": 1,
+        "n": 6,
+        "rate": 0.16666666666666666,
+        "ci": [
+         0.03005258587173032,
+         0.563509436563646
+        ]
+       }
+      },
+      "any_layer": {
+       "k": 1,
+       "n": 6,
+       "rate": 0.16666666666666666
+      }
+     },
+     "10": {
+      "layers": {
+       "32": {
+        "k": 0,
+        "n": 6,
+        "rate": 0.0,
+        "ci": [
+         0.0,
+         0.3903430336530645
+        ]
+       },
+       "40": {
+        "k": 0,
+        "n": 6,
+        "rate": 0.0,
+        "ci": [
+         0.0,
+         0.3903430336530645
+        ]
+       },
+       "48": {
+        "k": 1,
+        "n": 6,
+        "rate": 0.16666666666666666,
+        "ci": [
+         0.03005258587173032,
+         0.563509436563646
+        ]
+       },
+       "56": {
+        "k": 3,
+        "n": 6,
+        "rate": 0.5,
+        "ci": [
+         0.18761280689940868,
+         0.8123871931005913
+        ]
+       }
+      },
+      "any_layer": {
+       "k": 3,
+       "n": 6,
+       "rate": 0.5
+      }
+     }
+    },
+    "tracked": {
+     "32": {
+      "k": 0,
+      "n": 6
+     },
+     "40": {
+      "k": 0,
+      "n": 6
+     },
+     "48": {
+      "k": 0,
+      "n": 6
+     },
+     "56": {
+      "k": 0,
+      "n": 6
+     }
+    }
+   },
+   "told\u00b7blind": {
+    "label": "Told (ceiling) \u00b7 blind",
+    "n": 6,
+    "by_k": {
+     "1": {
+      "layers": {
+       "32": {
+        "k": 0,
+        "n": 6,
+        "rate": 0.0,
+        "ci": [
+         0.0,
+         0.3903430336530645
+        ]
+       },
+       "40": {
+        "k": 0,
+        "n": 6,
+        "rate": 0.0,
+        "ci": [
+         0.0,
+         0.3903430336530645
+        ]
+       },
+       "48": {
+        "k": 0,
+        "n": 6,
+        "rate": 0.0,
+        "ci": [
+         0.0,
+         0.3903430336530645
+        ]
+       },
+       "56": {
+        "k": 5,
+        "n": 6,
+        "rate": 0.8333333333333334,
+        "ci": [
+         0.43649056343635395,
+         0.9699474141282697
+        ]
+       }
+      },
+      "any_layer": {
+       "k": 5,
+       "n": 6,
+       "rate": 0.8333333333333334
+      }
+     },
+     "10": {
+      "layers": {
+       "32": {
+        "k": 0,
+        "n": 6,
+        "rate": 0.0,
+        "ci": [
+         0.0,
+         0.3903430336530645
+        ]
+       },
+       "40": {
+        "k": 0,
+        "n": 6,
+        "rate": 0.0,
+        "ci": [
+         0.0,
+         0.3903430336530645
+        ]
+       },
+       "48": {
+        "k": 1,
+        "n": 6,
+        "rate": 0.16666666666666666,
+        "ci": [
+         0.03005258587173032,
+         0.563509436563646
+        ]
+       },
+       "56": {
+        "k": 6,
+        "n": 6,
+        "rate": 1.0,
+        "ci": [
+         0.6096569663469354,
+         0.9999999999999999
+        ]
+       }
+      },
+      "any_layer": {
+       "k": 6,
+       "n": 6,
+       "rate": 1.0
+      }
+     }
+    },
+    "tracked": {
+     "32": {
+      "k": 0,
+      "n": 6
+     },
+     "40": {
+      "k": 0,
+      "n": 6
+     },
+     "48": {
+      "k": 0,
+      "n": 6
+     },
+     "56": {
+      "k": 0,
+      "n": 6
+     }
+    }
+   }
+  },
+  "invisible_targets": [],
+  "loop": {
+   "cells": {
+    "hidden\u00b7lens": {
+     "goal": "hidden",
+     "arm": "lens",
+     "n": 6,
+     "rounds": [
+      {
+       "n": 6,
+       "share": {
+        "32": 0.0,
+        "40": 0.0,
+        "48": 0.030303030303030304,
+        "56": 0.07575757575757576
+       },
+       "copied": 1.0,
+       "leaked": 0.0,
+       "decoy": {
+        "32": 0.0,
+        "40": 0.030303030303030304,
+        "48": 0.030303030303030304,
+        "56": 0.15151515151515152
+       },
+       "sep": {
+        "32": 0.0,
+        "40": -0.030303030303030304,
+        "48": 0.0,
+        "56": -0.07575757575757576
+       }
+      },
+      {
+       "n": 6,
+       "share": {
+        "32": 0.0,
+        "40": 0.0,
+        "48": 0.0,
+        "56": 0.030303030303030304
+       },
+       "copied": 1.0,
+       "leaked": 0.0,
+       "decoy": {
+        "32": 0.0,
+        "40": 0.0,
+        "48": 0.015151515151515152,
+        "56": 0.13636363636363638
+       },
+       "sep": {
+        "32": 0.0,
+        "40": 0.0,
+        "48": -0.015151515151515152,
+        "56": -0.10606060606060606
+       }
+      },
+      {
+       "n": 6,
+       "share": {
+        "32": 0.0,
+        "40": 0.0,
+        "48": 0.0,
+        "56": 0.05555555555555555
+       },
+       "copied": 1.0,
+       "leaked": 0.0,
+       "decoy": {
+        "32": 0.0,
+        "40": 0.0,
+        "48": 0.018518518518518517,
+        "56": 0.1851851851851852
+       },
+       "sep": {
+        "32": 0.0,
+        "40": 0.0,
+        "48": -0.018518518518518517,
+        "56": -0.12962962962962962
+       }
+      },
+      {
+       "n": 6,
+       "share": {
+        "32": 0.0,
+        "40": 0.0,
+        "48": 0.020833333333333332,
+        "56": 0.0625
+       },
+       "copied": 1.0,
+       "leaked": 0.0,
+       "decoy": {
+        "32": 0.0,
+        "40": 0.0,
+        "48": 0.020833333333333332,
+        "56": 0.125
+       },
+       "sep": {
+        "32": 0.0,
+        "40": 0.0,
+        "48": 0.0,
+        "56": -0.0625
+       }
+      },
+      {
+       "n": 6,
+       "share": {
+        "32": 0.0,
+        "40": 0.0,
+        "48": 0.05555555555555555,
+        "56": 0.05555555555555555
+       },
+       "copied": 1.0,
+       "leaked": 0.0,
+       "decoy": {
+        "32": 0.0,
+        "40": 0.018518518518518517,
+        "48": 0.05555555555555555,
+        "56": 0.1851851851851852
+       },
+       "sep": {
+        "32": 0.0,
+        "40": -0.018518518518518517,
+        "48": 0.0,
+        "56": -0.12962962962962962
+       }
+      },
+      {
+       "n": 6,
+       "share": {
+        "32": 0.0,
+        "40": 0.0,
+        "48": 0.020833333333333332,
+        "56": 0.041666666666666664
+       },
+       "copied": 1.0,
+       "leaked": 0.0,
+       "decoy": {
+        "32": 0.0,
+        "40": 0.0,
+        "48": 0.041666666666666664,
+        "56": 0.1875
+       },
+       "sep": {
+        "32": 0.0,
+        "40": 0.0,
+        "48": -0.020833333333333332,
+        "56": -0.14583333333333334
+       }
+      }
+     ]
+    },
+    "hidden\u00b7yoked": {
+     "goal": "hidden",
+     "arm": "yoked",
+     "n": 6,
+     "rounds": [
+      {
+       "n": 6,
+       "share": {
+        "32": 0.0,
+        "40": 0.0,
+        "48": 0.030303030303030304,
+        "56": 0.07575757575757576
+       },
+       "copied": 1.0,
+       "leaked": 0.0,
+       "decoy": {
+        "32": 0.0,
+        "40": 0.030303030303030304,
+        "48": 0.030303030303030304,
+        "56": 0.13636363636363635
+       },
+       "sep": {
+        "32": 0.0,
+        "40": -0.030303030303030304,
+        "48": 0.0,
+        "56": -0.06060606060606061
+       }
+      },
+      {
+       "n": 6,
+       "share": {
+        "32": 0.0,
+        "40": 0.0,
+        "48": 0.0,
+        "56": 0.030303030303030304
+       },
+       "copied": 1.0,
+       "leaked": 0.0,
+       "decoy": {
+        "32": 0.0,
+        "40": 0.0,
+        "48": 0.030303030303030304,
+        "56": 0.13636363636363638
+       },
+       "sep": {
+        "32": 0.0,
+        "40": 0.0,
+        "48": -0.030303030303030304,
+        "56": -0.10606060606060606
+       }
+      },
+      {
+       "n": 6,
+       "share": {
+        "32": 0.0,
+        "40": 0.0,
+        "48": 0.0,
+        "56": 0.037037037037037035
+       },
+       "copied": 1.0,
+       "leaked": 0.0,
+       "decoy": {
+        "32": 0.0,
+        "40": 0.0,
+        "48": 0.018518518518518517,
+        "56": 0.1851851851851852
+       },
+       "sep": {
+        "32": 0.0,
+        "40": 0.0,
+        "48": -0.018518518518518517,
+        "56": -0.14814814814814814
+       }
+      },
+      {
+       "n": 6,
+       "share": {
+        "32": 0.0,
+        "40": 0.0,
+        "48": 0.020833333333333332,
+        "56": 0.041666666666666664
+       },
+       "copied": 1.0,
+       "leaked": 0.0,
+       "decoy": {
+        "32": 0.0,
+        "40": 0.0,
+        "48": 0.0625,
+        "56": 0.16666666666666666
+       },
+       "sep": {
+        "32": 0.0,
+        "40": 0.0,
+        "48": -0.041666666666666664,
+        "56": -0.125
+       }
+      },
+      {
+       "n": 6,
+       "share": {
+        "32": 0.0,
+        "40": 0.0,
+        "48": 0.05555555555555555,
+        "56": 0.05555555555555555
+       },
+       "copied": 1.0,
+       "leaked": 0.0,
+       "decoy": {
+        "32": 0.0,
+        "40": 0.018518518518518517,
+        "48": 0.07407407407407407,
+        "56": 0.2222222222222222
+       },
+       "sep": {
+        "32": 0.0,
+        "40": -0.018518518518518517,
+        "48": -0.018518518518518517,
+        "56": -0.16666666666666666
+       }
+      },
+      {
+       "n": 6,
+       "share": {
+        "32": 0.0,
+        "40": 0.0,
+        "48": 0.020833333333333332,
+        "56": 0.041666666666666664
+       },
+       "copied": 1.0,
+       "leaked": 0.0,
+       "decoy": {
+        "32": 0.0,
+        "40": 0.0,
+        "48": 0.041666666666666664,
+        "56": 0.20833333333333334
+       },
+       "sep": {
+        "32": 0.0,
+        "40": 0.0,
+        "48": -0.020833333333333332,
+        "56": -0.16666666666666666
+       }
+      }
+     ]
+    },
+    "hidden\u00b7blind": {
+     "goal": "hidden",
+     "arm": "blind",
+     "n": 6,
+     "rounds": [
+      {
+       "n": 6,
+       "share": {
+        "32": 0.0,
+        "40": 0.0,
+        "48": 0.030303030303030304,
+        "56": 0.07575757575757576
+       },
+       "copied": 1.0,
+       "leaked": 0.0,
+       "decoy": {
+        "32": 0.0,
+        "40": 0.030303030303030304,
+        "48": 0.030303030303030304,
+        "56": 0.13636363636363635
+       },
+       "sep": {
+        "32": 0.0,
+        "40": -0.030303030303030304,
+        "48": 0.0,
+        "56": -0.06060606060606061
+       }
+      },
+      {
+       "n": 6,
+       "share": {
+        "32": 0.0,
+        "40": 0.0,
+        "48": 0.0,
+        "56": 0.06060606060606061
+       },
+       "copied": 1.0,
+       "leaked": 0.0,
+       "decoy": {
+        "32": 0.0,
+        "40": 0.0,
+        "48": 0.030303030303030304,
+        "56": 0.21212121212121213
+       },
+       "sep": {
+        "32": 0.0,
+        "40": 0.0,
+        "48": -0.030303030303030304,
+        "56": -0.15151515151515152
+       }
+      },
+      {
+       "n": 6,
+       "share": {
+        "32": 0.0,
+        "40": 0.0,
+        "48": 0.0,
+        "56": 0.1111111111111111
+       },
+       "copied": 1.0,
+       "leaked": 0.0,
+       "decoy": {
+        "32": 0.0,
+        "40": 0.0,
+        "48": 0.018518518518518517,
+        "56": 0.1851851851851852
+       },
+       "sep": {
+        "32": 0.0,
+        "40": 0.0,
+        "48": -0.018518518518518517,
+        "56": -0.07407407407407407
+       }
+      },
+      {
+       "n": 6,
+       "share": {
+        "32": 0.0,
+        "40": 0.0,
+        "48": 0.0,
+        "56": 0.0
+       },
+       "copied": 1.0,
+       "leaked": 0.0,
+       "decoy": {
+        "32": 0.0,
+        "40": 0.0,
+        "48": 0.041666666666666664,
+        "56": 0.041666666666666664
+       },
+       "sep": {
+        "32": 0.0,
+        "40": 0.0,
+        "48": -0.041666666666666664,
+        "56": -0.041666666666666664
+       }
+      },
+      {
+       "n": 6,
+       "share": {
+        "32": 0.0,
+        "40": 0.0,
+        "48": 0.037037037037037035,
+        "56": 0.05555555555555555
+       },
+       "copied": 1.0,
+       "leaked": 0.0,
+       "decoy": {
+        "32": 0.0,
+        "40": 0.037037037037037035,
+        "48": 0.07407407407407407,
+        "56": 0.1851851851851852
+       },
+       "sep": {
+        "32": 0.0,
+        "40": -0.037037037037037035,
+        "48": -0.037037037037037035,
+        "56": -0.12962962962962962
+       }
+      },
+      {
+       "n": 6,
+       "share": {
+        "32": 0.0,
+        "40": 0.0,
+        "48": 0.020833333333333332,
+        "56": 0.0625
+       },
+       "copied": 1.0,
+       "leaked": 0.0,
+       "decoy": {
+        "32": 0.0,
+        "40": 0.0,
+        "48": 0.041666666666666664,
+        "56": 0.1875
+       },
+       "sep": {
+        "32": 0.0,
+        "40": 0.0,
+        "48": -0.020833333333333332,
+        "56": -0.125
+       }
+      }
+     ]
+    },
+    "told\u00b7blind": {
+     "goal": "told",
+     "arm": "blind",
+     "n": 6,
+     "rounds": [
+      {
+       "n": 6,
+       "share": {
+        "32": 0.0,
+        "40": 0.0,
+        "48": 0.04545454545454545,
+        "56": 0.2727272727272727
+       },
+       "copied": 1.0,
+       "leaked": 0.0,
+       "decoy": {
+        "32": 0.0,
+        "40": 0.0,
+        "48": 0.0,
+        "56": 0.015151515151515152
+       },
+       "sep": {
+        "32": 0.0,
+        "40": 0.0,
+        "48": 0.04545454545454545,
+        "56": 0.25757575757575757
+       }
+      },
+      {
+       "n": 6,
+       "share": {
+        "32": 0.0,
+        "40": 0.0,
+        "48": 0.030303030303030304,
+        "56": 0.24242424242424243
+       },
+       "copied": 1.0,
+       "leaked": 0.0,
+       "decoy": {
+        "32": 0.0,
+        "40": 0.0,
+        "48": 0.0,
+        "56": 0.0
+       },
+       "sep": {
+        "32": 0.0,
+        "40": 0.0,
+        "48": 0.030303030303030304,
+        "56": 0.24242424242424243
+       }
+      },
+      {
+       "n": 6,
+       "share": {
+        "32": 0.0,
+        "40": 0.0,
+        "48": 0.018518518518518517,
+        "56": 0.16666666666666666
+       },
+       "copied": 1.0,
+       "leaked": 0.0,
+       "decoy": {
+        "32": 0.0,
+        "40": 0.0,
+        "48": 0.0,
+        "56": 0.037037037037037035
+       },
+       "sep": {
+        "32": 0.0,
+        "40": 0.0,
+        "48": 0.018518518518518517,
+        "56": 0.12962962962962962
+       }
+      },
+      {
+       "n": 6,
+       "share": {
+        "32": 0.0,
+        "40": 0.0,
+        "48": 0.041666666666666664,
+        "56": 0.20833333333333334
+       },
+       "copied": 1.0,
+       "leaked": 0.0,
+       "decoy": {
+        "32": 0.0,
+        "40": 0.0,
+        "48": 0.020833333333333332,
+        "56": 0.020833333333333332
+       },
+       "sep": {
+        "32": 0.0,
+        "40": 0.0,
+        "48": 0.020833333333333332,
+        "56": 0.1875
+       }
+      },
+      {
+       "n": 6,
+       "share": {
+        "32": 0.0,
+        "40": 0.0,
+        "48": 0.0925925925925926,
+        "56": 0.24074074074074073
+       },
+       "copied": 1.0,
+       "leaked": 0.0,
+       "decoy": {
+        "32": 0.0,
+        "40": 0.0,
+        "48": 0.0,
+        "56": 0.018518518518518517
+       },
+       "sep": {
+        "32": 0.0,
+        "40": 0.0,
+        "48": 0.0925925925925926,
+        "56": 0.22222222222222224
+       }
+      },
+      {
+       "n": 6,
+       "share": {
+        "32": 0.0,
+        "40": 0.0,
+        "48": 0.020833333333333332,
+        "56": 0.125
+       },
+       "copied": 1.0,
+       "leaked": 0.0,
+       "decoy": {
+        "32": 0.0,
+        "40": 0.0,
+        "48": 0.0,
+        "56": 0.041666666666666664
+       },
+       "sep": {
+        "32": 0.0,
+        "40": 0.0,
+        "48": 0.020833333333333332,
+        "56": 0.08333333333333333
+       }
+      }
+     ]
+    }
+   },
+   "contrasts": {
+    "hidden: lens \u2212 yoked": {
+     "n": 6,
+     "mean": 0.03598484848484849,
+     "ci": [
+      -0.03030303030303029,
+      0.12310606060606061
+     ],
+     "lens_better": 2,
+     "other_better": 2,
+     "layers": [
+      "56"
+     ]
+    },
+    "hidden: lens \u2212 blind": {
+     "n": 6,
+     "mean": -0.005681818181818181,
+     "ci": [
+      -0.1571969696969697,
+      0.10416666666666667
+     ],
+     "lens_better": 3,
+     "other_better": 1,
+     "layers": [
+      "56"
+     ]
+    },
+    "hidden: lens \u2212 yoked (held out: L48)": {
+     "n": 6,
+     "mean": 0.0,
+     "ci": [
+      0.0,
+      0.0
+     ],
+     "lens_better": 0,
+     "other_better": 0,
+     "layers": [
+      "48"
+     ]
+    },
+    "hidden: lens \u2212 blind (held out: L48)": {
+     "n": 6,
+     "mean": 0.0,
+     "ci": [
+      -0.0625,
+      0.0625
+     ],
+     "lens_better": 1,
+     "other_better": 1,
+     "layers": [
+      "48"
+     ]
+    }
+   }
+  }
+ }
+}

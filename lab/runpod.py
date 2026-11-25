@@ -1,4 +1,4 @@
-"""GPU on demand through the RunPod REST API.
+"""GPU on demand through the RunPod REST API (v2; v1 was retired on 2026-11-15).
 
 The app runs on your computer. Once, it creates a network volume (storage that outlives pods)
 in one data center. Each session, "Start GPU" creates a pod on that volume running
@@ -12,7 +12,7 @@ import secrets
 
 import httpx
 
-BASE = "https://rest.runpod.io/v1"
+BASE = "https://api.runpod.io/v2"
 GPU_TYPES = ["NVIDIA A100 80GB PCIe", "NVIDIA A100-SXM4-80GB", "NVIDIA H100 80GB HBM3", "NVIDIA H100 PCIe"]
 DEFAULT_IMAGE = "runpod/pytorch:2.8.0-py3.11-cuda12.8.1-cudnn-devel-ubuntu22.04"
 DEFAULT_MODEL = "Qwen/Qwen3.6-27B"
@@ -68,11 +68,13 @@ def proxy_url(pod_id: str) -> str:
 
 
 async def create_volume(key: str, data_center: str, size_gb: int = 150) -> dict:
-    return await _call("POST", key, "/networkvolumes", {"name": "mala-lab", "size": size_gb, "dataCenterId": data_center})
+    return await _call("POST", key, "/network-volumes", {"name": "mala-lab", "size": size_gb, "dataCenter": data_center})
 
 
 async def start_pod(key: str, cfg: dict) -> dict:
-    """A pod on the saved volume. Returns the pod id and the engine URL and token to use."""
+    """A pod on the saved volume. Returns the pod id and the engine URL and token to use.
+    A v2 pod takes one GPU type, so the types are tried in order: A100s first, H100s only when
+    none are free. The error from the last type is raised if none has capacity."""
     token = secrets.token_urlsafe(24)
     env = {
         "IE_TOKEN": token,
@@ -83,30 +85,33 @@ async def start_pod(key: str, cfg: dict) -> dict:
         env["HF_TOKEN"] = cfg["hf_token"]
     body = {
         "name": "mala-lab-gpu",
-        "imageName": cfg.get("runpod_image") or DEFAULT_IMAGE,
-        "cloudType": "SECURE",
-        "gpuTypeIds": GPU_TYPES,
-        "gpuTypePriority": "custom",  # A100s first; H100s only when none are free
-        "gpuCount": 1,
-        "networkVolumeId": cfg["network_volume_id"],
+        "image": cfg.get("runpod_image") or DEFAULT_IMAGE,
+        "cloud": "SECURE",
+        "mounts": {"network": [{"volumeId": cfg["network_volume_id"], "path": "/workspace"}]},
         "dataCenterIds": [cfg["data_center"]],
-        "volumeMountPath": "/workspace",
-        "containerDiskInGb": 40,
+        "disk": 40,
         "ports": [f"{PORT}/http", f"{STATUS_PORT}/http"],
         "env": env,
-        "dockerStartCmd": ["bash", "-c", START],
+        "cmd": ["bash", "-c", START],
     }
-    pod = await _call("POST", key, "/pods", body)
-    return {"pod_id": pod["id"], "interp_url": proxy_url(pod["id"]), "interp_token": token}
+    err: Exception | None = None
+    for gpu in GPU_TYPES:
+        try:
+            pod = await _call("POST", key, "/pods", {**body, "gpu": {"id": gpu, "count": 1}})
+        except RuntimeError as e:
+            err = e
+            continue
+        return {"pod_id": pod["id"], "interp_url": proxy_url(pod["id"]), "interp_token": token}
+    raise err or RuntimeError("no GPU types configured")
 
 
 async def pod_status(key: str, pod_id: str) -> dict:
     pod = await _call("GET", key, f"/pods/{pod_id}")
     return {
         "id": pod.get("id", pod_id),
-        "status": pod.get("desiredStatus"),
-        "gpu": (pod.get("machine") or {}).get("gpuTypeId") or (pod.get("gpu") or {}).get("id"),
-        "cost_per_hr": pod.get("costPerHr"),
+        "status": pod.get("status"),
+        "gpu": (pod.get("gpu") or {}).get("id"),
+        "cost_per_hr": pod.get("cost"),
     }
 
 
