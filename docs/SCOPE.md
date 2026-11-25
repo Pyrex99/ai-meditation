@@ -63,6 +63,10 @@ the run report.
 | H3a | The model can find which of two words is its target from its own score alone | `self-steer-hidden-pair-v2` (fresh prompt each round), hidden: change in separation (target − decoy share) at L56, R1 to R6, lens − yoked | CI above 0 | **not supported**: run-20261125-115434-83a4, +0.8 pts (CI −1.6 to +3.0, n=24): CI includes 0 with half-width under 3, the preregistered "counts against". Ceiling held (told R6 +14.1 pts). (v1 can't be read: run-20261103-185229-62ab, +1.4 pts (CI −0.7 to +3.3, n=24), but the told ceiling is 0 by R3, see Changes) |
 | H3b | Not lens-gaming | the same contrast at L48, never shown | same sign, CI above 0 | not supported: +1.0 pts (CI +0.0 to +2.6), moot without H3a (v1: −0.4 pts) |
 | H3c | Outputs stay clean | copied ≥ 90%, leaked (either word) ≤ 5%, every arm and round | | **holds**: 100% copied, 0 leaks, every cell and round (v1 the same) |
+| H4a | With a record of its choices, the model can use its own score to find and hold the target | `self-steer-choice-pair`, hidden: change in separation at L56, R1 to R6, lens − yoked | CI above 0 | not run |
+| H4b | Not lens-gaming | the same contrast at L48, never shown | same sign, CI above 0 | not run |
+| H4c | It picks the right word more often | share of R4-R6 choosing the target's number, lens − yoked (chance 50%) | CI above 0 | not run |
+| H4d | Outputs stay clean | copied ≥ 90%, leaked (either word, anywhere) ≤ 5%, a valid number ≥ 90%, every arm and round | | not run |
 
 **Self-steering is demonstrated** at this stage only if H1a, H1b, H1d and H1e all hold. H1a alone
 could be "say it more" leaking inward; bidirectional control with a held-out layer and clean
@@ -213,3 +217,10 @@ nothing the model can use. Try one redesign (below), then stop and write it up a
   while making the loop learnable. The claim it can support is narrower: the model can use
   its readout to find which concept to hold. If that is null too, stop Path 1's hidden-target
   line and write it up.
+- 2026-11-25, before any data on it: added H4 and `self-steer-choice-pair`, the choice-line
+  redesign proposed above. Same as hidden-pair v2 (fresh prompt each round, same items, arms,
+  layers) except the model writes "1" or "2" before copying, only the sentence is scored, and
+  each earlier attempt is listed with the number written beside its feedback. Ceiling at R6:
+  told separation ≥ 5 pts and told chose_target ≥ 90%. If chose_target rises but separation
+  doesn't, report it as finding the answer without steering. If H4a is null, stop the
+  hidden-target line and write it up. Code: `choices` and `score_after` in `lab/loop.py`.

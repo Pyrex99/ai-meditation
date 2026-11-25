@@ -345,3 +345,30 @@ def test_hidden_pair_v2_is_v1_with_fresh_context():
     strip = lambda spec: {k: v for k, v in spec.items() if k not in ("name", "title", "description", "goals")}  # noqa: E731
     assert strip(v1) == strip(v2)
     assert {k: {**g, "context": None} for k, g in v2["goals"].items()} == {k: {**g, "context": None} for k, g in v1["goals"].items()}
+
+
+def test_choice_line_scoring_and_history():
+    from lab import experiment as E
+    from lab import loop as L
+
+    raw, spec = E.load("self-steer-choice-pair")
+    assert E.validate(spec) == []
+    steps = [{"tok": "2"}, {"tok": "\n"}, {"tok": "\n"}, {"tok": "The"}, {"tok": " bus"}]
+    assert L.carrier(steps, spec) == steps[3:]
+    vals = {"pair": {"a": "ocean", "b": "guitar", "target": "guitar", "decoy": "ocean"}, "sentence": "The bus."}
+    tpl = spec["prompt"]["task"]
+    assert L.clean_output("2\nThe bus.", vals, spec, tpl) == \
+        {"leaked": False, "copied": True, "choice": "2", "chose": True, "chose_target": True}
+    assert L.clean_output("1\nThe bus.", vals, spec, tpl)["chose_target"] is False
+    bad = L.clean_output("guitar\nThe bus.", vals, spec, tpl)
+    assert bad["leaked"] and bad["choice"] is None and not bad["chose"]
+    assert L.history_text(["score A", "score B"], ["1", None]) == \
+        "Attempt 1: you wrote 1. score A\n\nAttempt 2: you wrote no valid number. score B"
+    meta = asyncio.run(L.run_loop(SimEngine(), spec["name"], raw, spec, run_id="run-test-choice",
+                                  limit=None, seed=1, cancel=asyncio.Event()))
+    items = store.load_run_items("run-test-choice")
+    lens = next(it for it in items if it["condition"] == "hidden·lens")
+    assert "Attempt 1: you wrote" in lens["rounds"][1]["prompt"][1]["content"]
+    assert any("chose the target" in k for k in meta["results"]["loop"]["contrasts"])
+    assert "chose_target" in "\n".join(L.loop_report(meta, items))
+    assert any("choices" in e for e in L.validate({**spec, "score_after": None}))

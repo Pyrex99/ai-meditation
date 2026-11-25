@@ -22,6 +22,11 @@ A goal with `context: fresh` starts every round from a new single-turn prompt: t
 message, a summary of the earlier attempts' feedback, and the task. The model never sees its
 own earlier replies, and the context doesn't grow (experiments/fade-check.yaml).
 
+With `choices` and `score_after: newline` (experiments/self-steer-choice-pair.yaml) the model
+first writes the number of the word it is holding on its own line, then the sentence. Only the
+sentence is scored, and in a fresh context each earlier attempt is listed with the number it
+wrote beside its feedback, so a score can be tied to a choice.
+
 Every round's tokens, readouts and feedback are stored, so all numbers can be recomputed.
 """
 
@@ -40,6 +45,7 @@ from .experiment import (CONCURRENCY, NAME, SpecError, _fields, _norm, _retrying
                          readable_words, score_item, target_words)
 
 ARMS = ("lens", "yoked", "score", "blind")
+CHECKS = ("copied", "leaked", "correct", "chose", "chose_target")
 # Words that carry nothing about the workspace: punctuation and pieces of the chat template.
 _JUNK = re.compile(r"^[\W_]*$|^<\|")
 
@@ -90,6 +96,16 @@ def validate(spec: dict) -> list[str]:
         errs.append("target: the word to look for in the lens readout is required.")
     if not 2 <= int(spec.get("rounds", 0) or 0) <= 12:
         errs.append("rounds: between 2 and 12 (round 1 is the baseline, so a loop needs at least two).")
+    if spec.get("score_after") not in (None, "newline") or spec.get("score_until") not in (None, "newline"):
+        errs.append("score_after / score_until: newline, or leave them out.")
+    choices = spec.get("choices")
+    if choices is not None:
+        if not isinstance(choices, list) or len(choices) < 2 or spec.get("score_after") != "newline":
+            errs.append("choices: a list of two or more templates, used with score_after: newline.")
+        else:
+            for t in map(str, choices):
+                if _fields(t) - known:
+                    errs.append(f"choices: {t!r} uses {sorted(_fields(t) - known)}, which aren't variables.")
     rotate = spec.get("rotate")
     if rotate is not None and rotate not in variables:
         errs.append(f"rotate: {rotate!r} isn't a variable.")
@@ -146,7 +162,16 @@ def task_message(spec: dict, goal: dict, vals: dict) -> str:
 
 def carrier(steps: list[dict], spec: dict) -> list[dict]:
     """The steps that count: with `score_until: newline`, only those before the first line
-    break (the sentence, not the answer line after it)."""
+    break (the sentence, not the answer line after it); with `score_after: newline`, only those
+    after it (the sentence, not the choice line before it)."""
+    if spec.get("score_after") == "newline":
+        for n, st in enumerate(steps):
+            if "\n" in st.get("text", st["tok"]):
+                rest = steps[n + 1:]
+                while rest and not rest[0].get("text", rest[0]["tok"]).strip():
+                    rest = rest[1:]
+                return rest
+        return []
     if spec.get("score_until") != "newline":
         return steps
     out = []
@@ -191,16 +216,33 @@ def readout_text(steps: list[dict], target: str, layers: list[int], fb_layers: l
     return "\n".join(lines)
 
 
-def history_text(feedbacks: list[str]) -> str:
-    """Earlier attempts' feedback, for a fresh-context round."""
-    return "\n\n".join(f"Attempt {k}: {fb}" for k, fb in enumerate(feedbacks, 1))
+def history_text(feedbacks: list[str], choices: list[str | None] | None = None) -> str:
+    """Earlier attempts' feedback, for a fresh-context round. With choices, each attempt says
+    which number the model wrote."""
+    def said(c):
+        return f"you wrote {c}." if c else "you wrote no valid number."
+    return "\n\n".join(f"Attempt {k}: " + (said(choices[k - 1]) + " " if choices is not None else "") + fb
+                         for k, fb in enumerate(feedbacks, 1))
 
 
 def clean_output(output: str, vals: dict, spec: dict, template: str) -> dict:
-    """Did the model do the visible task, and did it say the target out loud?"""
-    first = output.strip().split("\n")[0].strip()
+    """Did the model do the visible task, and did it say the target out loud? With choices, the
+    first line is the number it chose and the sentence is the next line; a leak anywhere counts."""
+    lines = [ln.strip() for ln in output.strip().split("\n")]
+    first = lines[0]
     said = target_words(spec["target"].format(**vals)) + target_words(spec.get("decoy", "").format(**vals))
-    out = {"leaked": any(re.search(rf"\b{re.escape(w)}\b", first.lower()) for w in said)}
+    seen = first
+    choices = spec.get("choices")
+    if choices:
+        first, seen = next((ln for ln in lines[1:] if ln), ""), output
+    out = {"leaked": any(re.search(rf"\b{re.escape(w)}\b", seen.lower()) for w in said)}
+    if choices:
+        options = [str(c).format(**vals) for c in choices]
+        num = re.sub(r"[^0-9]", "", lines[0])
+        out["choice"] = num if num in {str(k) for k in range(1, len(options) + 1)} else None
+        out["chose"] = out["choice"] is not None
+        target = spec["target"].format(**vals)
+        out["chose_target"] = out["choice"] == str(options.index(target) + 1) if target in options else False
     # The text to copy is {sentence}, or {provoke} in the provocation tasks.
     copy = next((f for f in ("sentence", "provoke") if f in _fields(template)), None)
     if copy:
@@ -317,7 +359,8 @@ async def run_loop(engine: Engine, name: str, raw: str, spec: dict, *, run_id: s
             if goal.get("context") == "fresh":
                 msgs = [{"role": "system", "content": system}] if system else []
                 if r:
-                    task = f"Your earlier attempts at this task:\n\n{history_text([x['feedback'] for x in out_rounds])}\n\n{task}"
+                    picks = [x["check"].get("choice") for x in out_rounds] if spec.get("choices") else None
+                    task = f"Your earlier attempts at this task:\n\n{history_text([x['feedback'] for x in out_rounds], picks)}\n\n{task}"
             elif r:
                 msgs.append({"role": "user", "content": out_rounds[-1]["feedback"]})
             msgs.append({"role": "user", "content": task})
@@ -405,7 +448,7 @@ def loop_stats(spec: dict, items: list[dict]) -> dict:
         by_round = []
         for r in range(rounds):
             rs = [it["rounds"][r] for it in mine if len(it["rounds"]) > r]
-            checks = {k: _mean([float(x["check"][k]) for x in rs if k in x["check"]]) for k in ("copied", "leaked", "correct")}
+            checks = {k: _mean([float(x["check"][k]) for x in rs if k in x["check"]]) for k in CHECKS}
             row = {"n": len(rs), "share": {l: _mean([x["share"][l] for x in rs if x["share"][l] is not None]) for l in layers},
                    **{k: v for k, v in checks.items() if v is not None}}
             if has_decoy:
@@ -449,6 +492,18 @@ def loop_stats(spec: dict, items: list[dict]) -> dict:
                         "n": len(diffs), "mean": _mean(diffs), "ci": _boot_ci(diffs),
                         "lens_better": sum(d > 0 for d in diffs), "other_better": sum(d < 0 for d in diffs),
                         "layers": use}
+        if spec.get("choices"):
+            # Secondary: how often it chose the target's number in the second half of the rounds.
+            half = range(rounds // 2, rounds)
+            hit = {a: {it["item"]: _mean([float(it["rounds"][r]["check"]["chose_target"]) for r in half])
+                       for it in rows if it["goal"] == g and it["arm"] == a and len(it["rounds"]) == rounds} for a in ARMS}
+            for other in ("yoked", "blind"):
+                shared = sorted(set(hit["lens"]) & set(hit[other]))
+                diffs = [hit["lens"][i] - hit[other][i] for i in shared]
+                if diffs:
+                    out["contrasts"][f"{g}: lens − {other} (chose the target, R{half[0] + 1}-R{rounds}, not a change)"] = {
+                        "n": len(diffs), "mean": _mean(diffs), "ci": _boot_ci(diffs),
+                        "lens_better": sum(d > 0 for d in diffs), "other_better": sum(d < 0 for d in diffs), "layers": []}
     return out
 
 
@@ -506,11 +561,12 @@ def loop_report(meta: dict, items: list[dict]) -> list[str]:
     for key, c in stats["cells"].items():
         sh = c["rounds"][-1]["share"]
         lines.append(f"| {key} | " + " | ".join(f"{sh[l] * 100:.1f}%" if sh.get(l) is not None else "n/a" for l in layers) + " |")
-    checks = [k for k in ("copied", "leaked", "correct") if any(k in x for c in stats["cells"].values() for x in c["rounds"])]
+    checks = [k for k in CHECKS if any(k in x for c in stats["cells"].values() for x in c["rounds"])]
     if checks:
         lines += ["", "### Output checks by round", "",
-                  "copied = first line is the sentence exactly; leaked = the target word is written in it;",
-                  "correct = the answer after \"Answer:\" is right. A share gain that comes with leaks is not",
+                  "copied = the sentence line is exact; leaked = the target (or decoy) word is written;",
+                  "correct = the answer after \"Answer:\" is right; chose = the first line is a valid number;",
+                  "chose_target = that number is the target's. A share gain that comes with leaks is not",
                   "silent steering.", "",
                   "| Goal · arm | check | " + " | ".join(f"R{r + 1}" for r in range(meta["rounds"])) + " |",
                   "|---|---|" + "---|" * meta["rounds"]]

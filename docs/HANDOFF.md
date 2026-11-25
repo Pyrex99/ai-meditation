@@ -96,7 +96,7 @@ with a "1"/"2" choice line (SCOPE.md, Changes), then stop that line if it's null
 
 ## Next steps
 
-0. Build the choice-line redesign of hidden-pair (SCOPE.md, Changes, 2026-11-25): the model
+0. Run `self-steer-choice-pair` (built 2026-11-25, H4 in SCOPE.md): the model
    writes "1" or "2" before copying, the choice is shown back beside its score, only the
    sentence is scored. Pilot, then full. If null, stop the hidden-target line and write it up.
 1. Pilot `self-steer-focus-v2`: `python -m lab.cli run self-steer-focus-v2 --engine interp
