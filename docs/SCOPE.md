@@ -60,9 +60,9 @@ the run report.
 | H1e | Outputs stay clean | copied ≥ 90% and leaked ≤ 5% in every arm and round | | not run |
 | H2a | Lens feedback helps hold a hidden answer | `self-steer-hidden-answer`, solve: lens − yoked | CI above 0 | not run |
 | H2b | And makes the model more accurate | accuracy, rounds 2-4, lens vs yoked and blind | lens higher, CI excludes 0 | not run |
-| H3a | The model can find which of two words is its target from its own score alone | `self-steer-hidden-pair`, hidden: change in separation (target − decoy share) at L56, R1 to R6, lens − yoked | CI above 0 | **can't be read**: run-20261103-185229-62ab, +1.4 pts (CI −0.7 to +3.3, n=24), but the told ceiling is 0 by R3 (see Changes) |
-| H3b | Not lens-gaming | the same contrast at L48, never shown | same sign, CI above 0 | can't be read: −0.4 pts (CI −2.4 to +1.4) |
-| H3c | Outputs stay clean | copied ≥ 90%, leaked (either word) ≤ 5%, every arm and round | | **holds**: 100% copied, 0 leaks, every cell and round |
+| H3a | The model can find which of two words is its target from its own score alone | `self-steer-hidden-pair-v2` (fresh prompt each round), hidden: change in separation (target − decoy share) at L56, R1 to R6, lens − yoked | CI above 0 | not run on v2. (v1 **can't be read**: run-20261103-185229-62ab, +1.4 pts (CI −0.7 to +3.3, n=24), but the told ceiling is 0 by R3, see Changes) |
+| H3b | Not lens-gaming | the same contrast at L48, never shown | same sign, CI above 0 | not run on v2 (v1: −0.4 pts, CI −2.4 to +1.4) |
+| H3c | Outputs stay clean | copied ≥ 90%, leaked (either word) ≤ 5%, every arm and round | | not run on v2 (v1 holds: 100% copied, 0 leaks) |
 
 **Self-steering is demonstrated** at this stage only if H1a, H1b, H1d and H1e all hold. H1a alone
 could be "say it more" leaking inward; bidirectional control with a held-out layer and clean
@@ -194,3 +194,7 @@ nothing the model can use. Try one redesign (below), then stop and write it up a
   (CI +8.0 to +17.6, 22/1 items), but only +2.2 at the held-out L48 (CI −0.1 to +4.6). There
   is no yoked arm here, so this could be the score acting as a reminder; and the L56-only
   pattern is what lens-gaming would look like. H3 on fresh context is the test.
+- 2026-11-25, before any data on it: H3a-c now refer to `self-steer-hidden-pair-v2`, which is
+  v1 with `context: fresh` on both goals (the fade check's fix) and no other change. Same
+  metric, layers, arms, items and thresholds. The told ceiling is read at the last round (R6),
+  not averaged over rounds, both for the pilot gate and for whether H3 can be read.

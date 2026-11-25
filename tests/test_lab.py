@@ -193,7 +193,7 @@ def test_loop_specs_validate_and_count():
     from lab import experiment as E
     from lab import loop as L
 
-    for name in ("self-steer-focus", "self-steer-hidden-answer"):
+    for name in ("self-steer-focus", "self-steer-hidden-answer", "self-steer-hidden-pair-v2"):
         raw, spec = E.load(name)
         assert E.validate(spec) == [], name
     _, spec = E.load("self-steer-focus")
@@ -333,3 +333,15 @@ def test_fade_check_fresh_context_and_rotation():
     report = "\n".join(L.loop_report(meta, items))
     assert "### By sentence" in report
     assert any("context" in e for e in L.validate({**spec, "goals": {"x": {"text": "", "context": "odd"}}}))
+
+
+
+def test_hidden_pair_v2_is_v1_with_fresh_context():
+    from lab import experiment as E
+
+    _, v1 = E.load("self-steer-hidden-pair")
+    _, v2 = E.load("self-steer-hidden-pair-v2")
+    assert all(g.get("context") == "fresh" for g in v2["goals"].values())
+    strip = lambda spec: {k: v for k, v in spec.items() if k not in ("name", "title", "description", "goals")}  # noqa: E731
+    assert strip(v1) == strip(v2)
+    assert {k: {**g, "context": None} for k, g in v2["goals"].items()} == {k: {**g, "context": None} for k, g in v1["goals"].items()}
